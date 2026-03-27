@@ -1,0 +1,1368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notify - 聚合通知管理后台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', system-ui, sans-serif; }
+    
+    /* 亮色主题变量 */
+    :root {
+      --bg-body: #f0f0f2;
+      --bg-sidebar: rgba(255, 255, 255, 0.6);
+      --bg-main: rgba(255, 255, 255, 0.4);
+      --bg-card: rgba(255, 255, 255, 0.7);
+      --bg-card-hover: rgba(255, 255, 255, 0.9);
+      --bg-menu-hover: rgba(0, 0, 0, 0.06);
+      --bg-btn-secondary: rgba(255, 255, 255, 0.7);
+      --bg-btn-secondary-hover: rgba(255, 255, 255, 0.9);
+      --bg-tag: #e5e5e5;
+      --bg-tag-green: #d1fae5;
+      --bg-tag-blue: #dbeafe;
+      --bg-tag-yellow: #fef3c7;
+      --bg-tag-red: #fee2e2;
+      --bg-progress: #e5e5e5;
+      --bg-table-header: rgba(249, 250, 251, 0.5);
+      --bg-user-card: rgba(249, 250, 251, 0.8);
+      
+      --border-sidebar: rgba(255, 255, 255, 0.5);
+      --border-main: rgba(255, 255, 255, 0.3);
+      --border-card: rgba(255, 255, 255, 0.5);
+      --border-btn: rgba(0, 0, 0, 0.1);
+      --border-table: #e5e5e5;
+      
+      --text-primary: #18181b;
+      --text-secondary: #71717a;
+      --text-muted: #a1a1aa;
+      --text-menu: #52525b;
+      --text-menu-active: #ffffff;
+      
+      --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.08);
+      --shadow-card-hover: 0 12px 32px rgba(0, 0, 0, 0.12);
+    }
+    
+    /* 暗色主题变量 */
+    html.dark {
+      --bg-body: #0f0f10;
+      --bg-sidebar: rgba(30, 30, 35, 0.8);
+      --bg-main: rgba(24, 24, 28, 0.6);
+      --bg-card: rgba(35, 35, 40, 0.8);
+      --bg-card-hover: rgba(45, 45, 52, 0.9);
+      --bg-menu-hover: rgba(255, 255, 255, 0.08);
+      --bg-btn-secondary: rgba(50, 50, 58, 0.8);
+      --bg-btn-secondary-hover: rgba(60, 60, 70, 0.9);
+      --bg-tag: #3f3f46;
+      --bg-tag-green: rgba(16, 185, 129, 0.2);
+      --bg-tag-blue: rgba(59, 130, 246, 0.2);
+      --bg-tag-yellow: rgba(245, 158, 11, 0.2);
+      --bg-tag-red: rgba(239, 68, 68, 0.2);
+      --bg-progress: #3f3f46;
+      --bg-table-header: rgba(39, 39, 45, 0.8);
+      --bg-user-card: rgba(39, 39, 45, 0.8);
+      
+      --border-sidebar: rgba(255, 255, 255, 0.08);
+      --border-main: rgba(255, 255, 255, 0.06);
+      --border-card: rgba(255, 255, 255, 0.08);
+      --border-btn: rgba(255, 255, 255, 0.1);
+      --border-table: #3f3f46;
+      
+      --text-primary: #fafafa;
+      --text-secondary: #a1a1aa;
+      --text-muted: #71717a;
+      --text-menu: #a1a1aa;
+      --text-menu-active: #ffffff;
+      
+      --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.3);
+      --shadow-card-hover: 0 12px 32px rgba(0, 0, 0, 0.4);
+    }
+    
+    body { 
+      background: var(--bg-body);
+      transition: background 0.3s ease;
+    }
+    
+    .sidebar {
+      background: var(--bg-sidebar);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border-sidebar);
+      transition: all 0.3s ease;
+    }
+    
+    .main-content {
+      background: var(--bg-main);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border-main);
+      transition: all 0.3s ease;
+    }
+    
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      transition: all 0.2s ease;
+    }
+    
+    .card:hover {
+      background: var(--bg-card-hover);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-card-hover);
+    }
+    
+    .menu-item {
+      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
+      color: var(--text-menu);
+    }
+    
+    .menu-item::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 0;
+      height: 100%;
+      background: var(--bg-menu-hover);
+      transition: width 0.3s ease;
+      z-index: 0;
+      border-radius: inherit;
+    }
+    
+    .menu-item:hover::before {
+      width: 100%;
+    }
+    
+    .menu-item > * {
+      position: relative;
+      z-index: 1;
+    }
+    
+    .menu-item.active {
+      background: #1a1a1a;
+      color: var(--text-menu-active);
+    }
+    
+    html.dark .menu-item.active {
+      background: #27272a;
+    }
+    
+    .menu-item.active::before {
+      display: none;
+    }
+    
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    
+    .status-success { background: #10b981; }
+    .status-failed { background: #ef4444; }
+    .status-pending { background: #f59e0b; }
+    
+    .tag {
+      background: var(--bg-tag);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+    
+    .tag-green {
+      background: var(--bg-tag-green);
+      color: #10b981;
+    }
+    
+    html.dark .tag-green {
+      color: #34d399;
+    }
+    
+    .tag-blue {
+      background: var(--bg-tag-blue);
+      color: #3b82f6;
+    }
+    
+    html.dark .tag-blue {
+      color: #60a5fa;
+    }
+    
+    .tag-yellow {
+      background: var(--bg-tag-yellow);
+      color: #f59e0b;
+    }
+    
+    html.dark .tag-yellow {
+      color: #fbbf24;
+    }
+    
+    .tag-red {
+      background: var(--bg-tag-red);
+      color: #ef4444;
+    }
+    
+    html.dark .tag-red {
+      color: #f87171;
+    }
+    
+    .btn-primary {
+      background: #1a1a1a;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    
+    html.dark .btn-primary {
+      background: #fafafa;
+      color: #18181b;
+    }
+    
+    .btn-primary:hover {
+      background: #333;
+    }
+    
+    html.dark .btn-primary:hover {
+      background: #e4e4e7;
+    }
+    
+    .btn-secondary {
+      background: var(--bg-btn-secondary);
+      border: 1px solid var(--border-btn);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 500;
+      transition: all 0.2s;
+      color: var(--text-secondary);
+    }
+    
+    .btn-secondary:hover {
+      background: var(--bg-btn-secondary-hover);
+    }
+    
+    .code-editor {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    
+    .page { display: none; }
+    .page.active { display: block; }
+    
+    .progress-bar {
+      height: 6px;
+      background: var(--bg-progress);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+    
+    /* 表格样式 */
+    thead {
+      background: var(--bg-table-header);
+    }
+    
+    tbody tr {
+      border-bottom: 1px solid var(--border-table);
+    }
+    
+    /* 用户卡片背景 */
+    .user-channel-item {
+      background: var(--bg-user-card);
+    }
+    
+    /* 主题切换按钮 */
+    .theme-toggle {
+      transition: transform 0.3s ease;
+    }
+    
+    .theme-toggle:hover {
+      transform: rotate(15deg);
+    }
+    
+    /* 文本颜色类 */
+    .text-primary { color: var(--text-primary) !important; }
+    .text-secondary { color: var(--text-secondary) !important; }
+    .text-muted { color: var(--text-muted) !important; }
+
+    /* ===== 暗色模式全局覆盖 ===== */
+    html.dark body { color: var(--text-primary); }
+
+    /* 文字 */
+    html.dark .text-zinc-900 { color: #f4f4f5 !important; }
+    html.dark .text-zinc-700 { color: #d4d4d8 !important; }
+    html.dark .text-zinc-600 { color: #a1a1aa !important; }
+    html.dark .text-zinc-500 { color: #71717a !important; }
+    html.dark .text-zinc-400 { color: #52525b !important; }
+
+    /* 背景 */
+    html.dark .bg-zinc-50 { background-color: #27272a !important; }
+    html.dark .bg-zinc-100 { background-color: #3f3f46 !important; }
+    html.dark .bg-zinc-900 { background-color: #fafafa !important; }
+    html.dark .text-white { color: #18181b !important; }
+    html.dark .bg-white\/50 { background-color: rgba(255,255,255,0.06) !important; }
+    html.dark .bg-white\/40 { background-color: rgba(255,255,255,0.04) !important; }
+    html.dark .bg-zinc-50\/50 { background-color: rgba(39,39,42,0.8) !important; }
+    html.dark .bg-emerald-50\/50 { background-color: rgba(16,185,129,0.1) !important; }
+    html.dark .bg-rose-50\/50  { background-color: rgba(239,68,68,0.1) !important; }
+    html.dark .bg-rose-50\/30  { background-color: rgba(239,68,68,0.08) !important; }
+    html.dark .bg-rose-50  { background-color: rgba(239,68,68,0.12) !important; }
+    html.dark .bg-blue-100  { background-color: rgba(59,130,246,0.15) !important; }
+    html.dark .bg-green-100 { background-color: rgba(16,185,129,0.15) !important; }
+    html.dark .bg-orange-100{ background-color: rgba(245,158,11,0.15) !important; }
+    html.dark .bg-purple-100{ background-color: rgba(168,85,247,0.15) !important; }
+
+    /* 边框 */
+    html.dark .border-zinc-200 { border-color: #3f3f46 !important; }
+    html.dark .border-zinc-100 { border-color: #27272a !important; }
+    html.dark .border-emerald-100 { border-color: rgba(16,185,129,0.2) !important; }
+    html.dark .border-rose-100 { border-color: rgba(239,68,68,0.2) !important; }
+    html.dark .border-white\/50 { border-color: rgba(255,255,255,0.08) !important; }
+    html.dark .bg-zinc-300 { background-color: #52525b !important; }
+
+    /* 用户卡片渠道行背景 */
+    html.dark .bg-zinc-50.rounded-lg { background-color: #27272a !important; }
+
+    /* Logs 页面筛选按钮 */
+    html.dark .hover\:bg-white\/80:hover { background-color: rgba(255,255,255,0.1) !important; }
+
+    /* 头部 sticky 背景 */
+    html.dark header.sticky { background-color: rgba(24,24,28,0.8) !important; }
+
+    /* Logo 文字 */
+    html.dark h1.text-zinc-900 { color: #fafafa !important; }
+
+    /* 主题切换按钮图标 */
+    #icon-moon { display: block; }
+    #icon-sun  { display: none; }
+    html.dark #icon-moon { display: none; }
+    html.dark #icon-sun  { display: block; }
+
+    /* 全局过渡 */
+    *, *::before, *::after {
+      transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+    }
+  </style>
+</head>
+<body class="h-screen overflow-hidden">
+  <div class="flex h-full p-4 gap-4">
+    <!-- 左侧边栏 -->
+    <aside class="sidebar w-72 rounded-3xl flex flex-col shadow-lg">
+      <!-- Logo区域 -->
+      <div class="p-6 pb-4">
+        <div class="flex items-center gap-3 mb-1">
+          <div class="w-10 h-10 bg-zinc-900 rounded-xl flex items-center justify-center">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+            </svg>
+          </div>
+          <div>
+            <h1 class="font-bold text-lg text-zinc-900">Notify.</h1>
+            <p class="text-[10px] text-zinc-500 tracking-wider uppercase">Aggregation Core</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 菜单标题 -->
+      <div class="px-6 py-2">
+        <p class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Main Menu</p>
+      </div>
+
+      <!-- 菜单项 -->
+      <nav class="px-4 flex-1 space-y-1">
+        <button onclick="switchPage('overview')" id="menu-overview" class="menu-item active w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
+          </svg>
+          <div>
+            <p class="font-medium text-sm">Overview</p>
+            <p class="text-[10px] opacity-70">系统数据与总览</p>
+          </div>
+        </button>
+
+        <button onclick="switchPage('tasks')" id="menu-tasks" class="menu-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-zinc-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+          </svg>
+          <div>
+            <p class="font-medium text-sm">Tasks</p>
+            <p class="text-[10px] text-zinc-400">管理定时和一次性任务</p>
+          </div>
+        </button>
+
+        <button onclick="switchPage('channels')" id="menu-channels" class="menu-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-zinc-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+          </svg>
+          <div>
+            <p class="font-medium text-sm">Channels</p>
+            <p class="text-[10px] text-zinc-400">维护消息通知适配器</p>
+          </div>
+        </button>
+
+        <button onclick="switchPage('routing')" id="menu-routing" class="menu-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-zinc-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+          </svg>
+          <div>
+            <p class="font-medium text-sm">Routing</p>
+            <p class="text-[10px] text-zinc-400">用户触达与策略分发</p>
+          </div>
+        </button>
+
+        <button onclick="switchPage('logs')" id="menu-logs" class="menu-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-zinc-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg>
+          <div>
+            <p class="font-medium text-sm">Logs</p>
+            <p class="text-[10px] text-zinc-400">请求重试与调度流水</p>
+          </div>
+        </button>
+      </nav>
+
+      <!-- 底部用户信息 -->
+      <div class="p-4 mt-auto">
+        <div class="flex items-center gap-3 px-4 py-3 bg-white/50 rounded-xl">
+          <div class="w-9 h-9 rounded-full bg-gradient-to-br from-pink-400 to-orange-300 flex items-center justify-center text-white text-sm font-medium">
+            👨‍💼
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-zinc-900 truncate">System Admin</p>
+            <p class="text-[10px] text-zinc-500">ID: ntty_a8b9</p>
+          </div>
+          <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="main-content flex-1 rounded-3xl shadow-lg overflow-auto">
+      <!-- 顶部导航栏 -->
+      <header class="flex items-center justify-between px-8 py-5 border-b border-white/50 sticky top-0 bg-white/40 backdrop-blur-md z-10">
+        <div class="flex items-center gap-2 text-sm">
+          <span class="text-zinc-500">Workspace</span>
+          <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+          </svg>
+          <span id="page-title" class="font-semibold text-zinc-900">Dashboard</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <button onclick="toggleTheme()" class="theme-toggle p-2 rounded-lg hover:bg-white/50 transition">
+            <!-- 月亮：亮色模式时显示 -->
+            <svg id="icon-moon" class="w-5 h-5 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+            </svg>
+            <!-- 太阳：暗色模式时显示 -->
+            <svg id="icon-sun" class="w-5 h-5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m8.66-9H21M3 12H2m15.36-6.36l-.71.71M6.34 17.66l-.71.71M17.66 17.66l.71.71M6.34 6.34l.71.71M12 7a5 5 0 100 10A5 5 0 0012 7z"></path>
+            </svg>
+          </button>
+          <div class="w-px h-5 bg-zinc-300"></div>
+          <button class="p-2 rounded-lg hover:bg-white/50 transition relative">
+            <svg class="w-5 h-5 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+            </svg>
+            <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
+          </button>
+        </div>
+      </header>
+
+      <!-- ==================== Overview 页面 ==================== -->
+      <div id="page-overview" class="page active p-8">
+        <div class="mb-6">
+          <h1 class="text-2xl font-bold text-zinc-900">Dashboard</h1>
+          <p class="text-sm text-zinc-500 mt-1">系统运行状态与通知数据概览。</p>
+        </div>
+
+        <!-- 统计卡片 -->
+        <div class="grid grid-cols-4 gap-4 mb-6">
+          <div class="card rounded-2xl p-5">
+            <div class="flex items-start justify-between mb-4">
+              <p class="text-sm text-zinc-600">活跃定时任务</p>
+              <div class="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center">
+                <svg class="w-4 h-4 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+              </div>
+            </div>
+            <p class="text-3xl font-bold text-zinc-900">12</p>
+          </div>
+
+          <div class="card rounded-2xl p-5">
+            <div class="flex items-start justify-between mb-4">
+              <p class="text-sm text-zinc-600">今日发送总数</p>
+              <div class="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center">
+                <svg class="w-4 h-4 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                </svg>
+              </div>
+            </div>
+            <p class="text-3xl font-bold text-zinc-900">1450</p>
+          </div>
+
+          <div class="card rounded-2xl p-5 bg-emerald-50/50 border-emerald-100">
+            <div class="flex items-start justify-between mb-4">
+              <p class="text-sm text-zinc-600">发送成功率</p>
+              <div class="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                </svg>
+              </div>
+            </div>
+            <p class="text-3xl font-bold text-emerald-600">99.2%</p>
+          </div>
+
+          <div class="card rounded-2xl p-5 bg-rose-50/50 border-rose-100">
+            <div class="flex items-start justify-between mb-4">
+              <p class="text-sm text-zinc-600">失败/重试</p>
+              <div class="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center">
+                <svg class="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+              </div>
+            </div>
+            <p class="text-3xl font-bold text-rose-600">8</p>
+          </div>
+        </div>
+
+        <!-- 渠道成功率图表 -->
+        <div class="card rounded-2xl p-6 mb-6">
+          <h3 class="font-semibold text-zinc-900 mb-4">各渠道发送成功率</h3>
+          <div class="space-y-4">
+            <div class="flex items-center gap-4">
+              <span class="w-24 text-sm text-zinc-600">飞书</span>
+              <div class="flex-1 progress-bar">
+                <div class="progress-fill bg-emerald-500" style="width: 99.5%"></div>
+              </div>
+              <span class="w-16 text-right text-sm font-medium text-zinc-900">99.5%</span>
+              <span class="text-xs text-zinc-400">482/484</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <span class="w-24 text-sm text-zinc-600">钉钉</span>
+              <div class="flex-1 progress-bar">
+                <div class="progress-fill bg-emerald-500" style="width: 98.8%"></div>
+              </div>
+              <span class="w-16 text-right text-sm font-medium text-zinc-900">98.8%</span>
+              <span class="text-xs text-zinc-400">412/417</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <span class="w-24 text-sm text-zinc-600">企业微信</span>
+              <div class="flex-1 progress-bar">
+                <div class="progress-fill bg-emerald-500" style="width: 100%"></div>
+              </div>
+              <span class="w-16 text-right text-sm font-medium text-zinc-900">100%</span>
+              <span class="text-xs text-zinc-400">356/356</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <span class="w-24 text-sm text-zinc-600">Bark</span>
+              <div class="flex-1 progress-bar">
+                <div class="progress-fill bg-yellow-500" style="width: 95.2%"></div>
+              </div>
+              <span class="w-16 text-right text-sm font-medium text-zinc-900">95.2%</span>
+              <span class="text-xs text-zinc-400">120/126</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <span class="w-24 text-sm text-zinc-600">Pushplus</span>
+              <div class="flex-1 progress-bar">
+                <div class="progress-fill bg-emerald-500" style="width: 98.2%"></div>
+              </div>
+              <span class="w-16 text-right text-sm font-medium text-zinc-900">98.2%</span>
+              <span class="text-xs text-zinc-400">167/170</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 下方两栏布局 -->
+        <div class="grid grid-cols-2 gap-6">
+          <div class="card rounded-2xl p-6">
+            <h3 class="font-semibold text-zinc-900 mb-4">运行中的任务</h3>
+            <table class="w-full">
+              <thead>
+                <tr class="text-left text-xs text-zinc-500 border-b border-zinc-200">
+                  <th class="pb-3 font-medium">任务名称</th>
+                  <th class="pb-3 font-medium">类型</th>
+                  <th class="pb-3 font-medium">规则</th>
+                </tr>
+              </thead>
+              <tbody class="text-sm">
+                <tr class="border-b border-zinc-100">
+                  <td class="py-4 text-zinc-900">早间报表推送</td>
+                  <td class="py-4"><span class="tag">Cron</span></td>
+                  <td class="py-4 text-zinc-500 font-mono text-xs">0 9 * * *</td>
+                </tr>
+                <tr class="border-b border-zinc-100">
+                  <td class="py-4 text-zinc-900">周五团建提醒</td>
+                  <td class="py-4"><span class="tag">Cron</span></td>
+                  <td class="py-4 text-zinc-500 font-mono text-xs">0 18 * * 5</td>
+                </tr>
+                <tr class="border-b border-zinc-100">
+                  <td class="py-4 text-zinc-900">服务器健康检查</td>
+                  <td class="py-4"><span class="tag">Cron</span></td>
+                  <td class="py-4 text-zinc-500 font-mono text-xs">*/5 * * * *</td>
+                </tr>
+                <tr>
+                  <td class="py-4 text-zinc-900">数据库备份通知</td>
+                  <td class="py-4"><span class="tag">Cron</span></td>
+                  <td class="py-4 text-zinc-500 font-mono text-xs">0 2 * * *</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card rounded-2xl p-6">
+            <h3 class="font-semibold text-zinc-900 mb-4">最近发送记录</h3>
+            <table class="w-full">
+              <thead>
+                <tr class="text-left text-xs text-zinc-500 border-b border-zinc-200">
+                  <th class="pb-3 font-medium">时间</th>
+                  <th class="pb-3 font-medium">任务</th>
+                  <th class="pb-3 font-medium">状态</th>
+                </tr>
+              </thead>
+              <tbody class="text-sm">
+                <tr class="border-b border-zinc-100">
+                  <td class="py-3 text-zinc-500">10:05:22</td>
+                  <td class="py-3 text-zinc-900">早间报表推送</td>
+                  <td class="py-3">
+                    <div class="flex items-center gap-2">
+                      <span class="status-dot status-success"></span>
+                      <span class="text-emerald-600 text-xs">成功</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr class="border-b border-zinc-100">
+                  <td class="py-3 text-zinc-500">09:58:15</td>
+                  <td class="py-3 text-zinc-900">服务器健康检查</td>
+                  <td class="py-3">
+                    <div class="flex items-center gap-2">
+                      <span class="status-dot status-success"></span>
+                      <span class="text-emerald-600 text-xs">成功</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr class="border-b border-zinc-100">
+                  <td class="py-3 text-zinc-500">09:00:05</td>
+                  <td class="py-3 text-zinc-900">早间报表推送</td>
+                  <td class="py-3">
+                    <div class="flex items-center gap-2">
+                      <span class="status-dot status-success"></span>
+                      <span class="text-emerald-600 text-xs">成功</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr class="border-b border-zinc-100">
+                  <td class="py-3 text-zinc-500">08:35:42</td>
+                  <td class="py-3 text-zinc-900">数据库备份通知</td>
+                  <td class="py-3">
+                    <div class="flex items-center gap-2">
+                      <span class="status-dot status-success"></span>
+                      <span class="text-emerald-600 text-xs">成功</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="py-3 text-zinc-500">08:30:12</td>
+                  <td class="py-3 text-zinc-900">服务器告警</td>
+                  <td class="py-3">
+                    <div class="flex items-center gap-2">
+                      <span class="status-dot status-failed"></span>
+                      <span class="text-rose-600 text-xs">失败(已重试)</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== Tasks 页面 ==================== -->
+      <div id="page-tasks" class="page p-8">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h1 class="text-2xl font-bold text-zinc-900">Tasks</h1>
+            <p class="text-sm text-zinc-500 mt-1">管理定时和一次性通知任务。</p>
+          </div>
+          <button class="btn-primary flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            新建任务
+          </button>
+        </div>
+
+        <!-- 任务筛选 -->
+        <div class="flex gap-3 mb-6">
+          <button class="px-4 py-2 rounded-lg bg-zinc-900 text-white text-sm font-medium">全部</button>
+          <button class="px-4 py-2 rounded-lg bg-white/50 text-zinc-600 text-sm font-medium hover:bg-white/80">定时任务 (Cron)</button>
+          <button class="px-4 py-2 rounded-lg bg-white/50 text-zinc-600 text-sm font-medium hover:bg-white/80">一次性任务</button>
+          <button class="px-4 py-2 rounded-lg bg-white/50 text-zinc-600 text-sm font-medium hover:bg-white/80">已暂停</button>
+        </div>
+
+        <!-- 任务列表 -->
+        <div class="card rounded-2xl overflow-hidden">
+          <table class="w-full">
+            <thead class="bg-zinc-50/50">
+              <tr class="text-left text-xs text-zinc-500">
+                <th class="px-6 py-4 font-medium">任务名称</th>
+                <th class="px-6 py-4 font-medium">类型</th>
+                <th class="px-6 py-4 font-medium">目标用户</th>
+                <th class="px-6 py-4 font-medium">Cron规则/执行时间</th>
+                <th class="px-6 py-4 font-medium">下次执行</th>
+                <th class="px-6 py-4 font-medium">状态</th>
+                <th class="px-6 py-4 font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody class="text-sm">
+              <tr class="border-b border-zinc-100">
+                <td class="px-6 py-4">
+                  <div class="font-medium text-zinc-900">早间报表推送</div>
+                  <div class="text-xs text-zinc-400 mt-1">每日销售数据汇总</div>
+                </td>
+                <td class="px-6 py-4"><span class="tag tag-blue">Cron</span></td>
+                <td class="px-6 py-4 text-zinc-600">3 位用户</td>
+                <td class="px-6 py-4 font-mono text-xs text-zinc-500">0 9 * * *</td>
+                <td class="px-6 py-4 text-zinc-600">2024-01-16 09:00</td>
+                <td class="px-6 py-4"><span class="tag tag-green">运行中</span></td>
+                <td class="px-6 py-4">
+                  <div class="flex gap-2">
+                    <button class="p-1.5 rounded hover:bg-zinc-100" title="暂停">
+                      <svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                      </svg>
+                    </button>
+                    <button class="p-1.5 rounded hover:bg-zinc-100" title="编辑">
+                      <svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                      </svg>
+                    </button>
+                    <button class="p-1.5 rounded hover:bg-rose-50" title="删除">
+                      <svg class="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <tr class="border-b border-zinc-100">
+                <td class="px-6 py-4">
+                  <div class="font-medium text-zinc-900">周五团建提醒</div>
+                  <div class="text-xs text-zinc-400 mt-1">每周五下午提醒</div>
+                </td>
+                <td class="px-6 py-4"><span class="tag tag-blue">Cron</span></td>
+                <td class="px-6 py-4 text-zinc-600">8 位用户</td>
+                <td class="px-6 py-4 font-mono text-xs text-zinc-500">0 18 * * 5</td>
+                <td class="px-6 py-4 text-zinc-600">2024-01-19 18:00</td>
+                <td class="px-6 py-4"><span class="tag tag-green">运行中</span></td>
+                <td class="px-6 py-4">
+                  <div class="flex gap-2">
+                    <button class="p-1.5 rounded hover:bg-zinc-100"><svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></button>
+                    <button class="p-1.5 rounded hover:bg-zinc-100"><svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg></button>
+                    <button class="p-1.5 rounded hover:bg-rose-50"><svg class="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                  </div>
+                </td>
+              </tr>
+              <tr class="border-b border-zinc-100">
+                <td class="px-6 py-4">
+                  <div class="font-medium text-zinc-900">服务器健康检查</div>
+                  <div class="text-xs text-zinc-400 mt-1">每5分钟检查一次</div>
+                </td>
+                <td class="px-6 py-4"><span class="tag tag-blue">Cron</span></td>
+                <td class="px-6 py-4 text-zinc-600">2 位用户</td>
+                <td class="px-6 py-4 font-mono text-xs text-zinc-500">*/5 * * * *</td>
+                <td class="px-6 py-4 text-zinc-600">2024-01-15 14:35</td>
+                <td class="px-6 py-4"><span class="tag tag-green">运行中</span></td>
+                <td class="px-6 py-4">
+                  <div class="flex gap-2">
+                    <button class="p-1.5 rounded hover:bg-zinc-100"><svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></button>
+                    <button class="p-1.5 rounded hover:bg-zinc-100"><svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg></button>
+                    <button class="p-1.5 rounded hover:bg-rose-50"><svg class="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                  </div>
+                </td>
+              </tr>
+              <tr class="border-b border-zinc-100">
+                <td class="px-6 py-4">
+                  <div class="font-medium text-zinc-900">紧急系统维护通知</div>
+                  <div class="text-xs text-zinc-400 mt-1">一次性任务</div>
+                </td>
+                <td class="px-6 py-4"><span class="tag tag-yellow">一次性</span></td>
+                <td class="px-6 py-4 text-zinc-600">全部用户</td>
+                <td class="px-6 py-4 text-zinc-500">2024-01-15 20:00</td>
+                <td class="px-6 py-4 text-zinc-600">等待执行</td>
+                <td class="px-6 py-4"><span class="tag tag-yellow">待执行</span></td>
+                <td class="px-6 py-4">
+                  <div class="flex gap-2">
+                    <button class="p-1.5 rounded hover:bg-zinc-100"><svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg></button>
+                    <button class="p-1.5 rounded hover:bg-rose-50"><svg class="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="px-6 py-4">
+                  <div class="font-medium text-zinc-900">数据库备份通知</div>
+                  <div class="text-xs text-zinc-400 mt-1">每日凌晨备份</div>
+                </td>
+                <td class="px-6 py-4"><span class="tag tag-blue">Cron</span></td>
+                <td class="px-6 py-4 text-zinc-600">1 位用户</td>
+                <td class="px-6 py-4 font-mono text-xs text-zinc-500">0 2 * * *</td>
+                <td class="px-6 py-4 text-zinc-600">2024-01-16 02:00</td>
+                <td class="px-6 py-4"><span class="tag tag-green">运行中</span></td>
+                <td class="px-6 py-4">
+                  <div class="flex gap-2">
+                    <button class="p-1.5 rounded hover:bg-zinc-100"><svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></button>
+                    <button class="p-1.5 rounded hover:bg-zinc-100"><svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg></button>
+                    <button class="p-1.5 rounded hover:bg-rose-50"><svg class="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ==================== Channels 页面 ==================== -->
+      <div id="page-channels" class="page p-8">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h1 class="text-2xl font-bold text-zinc-900">Channels</h1>
+            <p class="text-sm text-zinc-500 mt-1">管理通知渠道适配器，支持自定义JS代码。</p>
+          </div>
+          <button class="btn-primary flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            新建渠道
+          </button>
+        </div>
+
+        <!-- 内置渠道 -->
+        <div class="mb-8">
+          <h3 class="text-sm font-semibold text-zinc-500 uppercase tracking-wider mb-4">内置渠道</h3>
+          <div class="grid grid-cols-3 gap-4">
+            <div class="card rounded-2xl p-5">
+              <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-lg">📱</div>
+                <div>
+                  <h4 class="font-semibold text-zinc-900">飞书</h4>
+                  <span class="tag tag-green text-[10px]">内置</span>
+                </div>
+              </div>
+              <p class="text-xs text-zinc-500 mb-4">支持飞书群机器人Webhook推送</p>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="status-dot status-success"></span>
+                  <span class="text-xs text-zinc-500">正常</span>
+                </div>
+                <button class="text-xs text-zinc-600 hover:text-zinc-900 font-medium">查看代码</button>
+              </div>
+            </div>
+
+            <div class="card rounded-2xl p-5">
+              <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-lg">💬</div>
+                <div>
+                  <h4 class="font-semibold text-zinc-900">钉钉</h4>
+                  <span class="tag tag-green text-[10px]">内置</span>
+                </div>
+              </div>
+              <p class="text-xs text-zinc-500 mb-4">支持钉钉群机器人Webhook推送</p>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="status-dot status-success"></span>
+                  <span class="text-xs text-zinc-500">正常</span>
+                </div>
+                <button class="text-xs text-zinc-600 hover:text-zinc-900 font-medium">查看代码</button>
+              </div>
+            </div>
+
+            <div class="card rounded-2xl p-5">
+              <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center text-lg">🏢</div>
+                <div>
+                  <h4 class="font-semibold text-zinc-900">企业微信</h4>
+                  <span class="tag tag-green text-[10px]">内置</span>
+                </div>
+              </div>
+              <p class="text-xs text-zinc-500 mb-4">支持企业微信群机器人推送</p>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="status-dot status-success"></span>
+                  <span class="text-xs text-zinc-500">正常</span>
+                </div>
+                <button class="text-xs text-zinc-600 hover:text-zinc-900 font-medium">查看代码</button>
+              </div>
+            </div>
+
+            <div class="card rounded-2xl p-5">
+              <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center text-lg">🔔</div>
+                <div>
+                  <h4 class="font-semibold text-zinc-900">Bark</h4>
+                  <span class="tag tag-green text-[10px]">内置</span>
+                </div>
+              </div>
+              <p class="text-xs text-zinc-500 mb-4">iOS推送通知服务</p>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="status-dot status-pending"></span>
+                  <span class="text-xs text-zinc-500">部分失败</span>
+                </div>
+                <button class="text-xs text-zinc-600 hover:text-zinc-900 font-medium">查看代码</button>
+              </div>
+            </div>
+
+            <div class="card rounded-2xl p-5">
+              <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-lg">📨</div>
+                <div>
+                  <h4 class="font-semibold text-zinc-900">Pushplus</h4>
+                  <span class="tag tag-green text-[10px]">内置</span>
+                </div>
+              </div>
+              <p class="text-xs text-zinc-500 mb-4">微信消息推送平台</p>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="status-dot status-success"></span>
+                  <span class="text-xs text-zinc-500">正常</span>
+                </div>
+                <button class="text-xs text-zinc-600 hover:text-zinc-900 font-medium">查看代码</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 自定义渠道 -->
+        <div>
+          <h3 class="text-sm font-semibold text-zinc-500 uppercase tracking-wider mb-4">自定义渠道</h3>
+          <div class="card rounded-2xl p-6">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center text-lg">⚡</div>
+                <div>
+                  <h4 class="font-semibold text-zinc-900">自定义Webhook</h4>
+                  <span class="tag text-[10px]">自定义</span>
+                </div>
+              </div>
+              <div class="flex gap-2">
+                <button class="btn-secondary text-sm">编辑代码</button>
+                <button class="p-2 rounded-lg hover:bg-rose-50">
+                  <svg class="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <p class="text-xs text-zinc-500 mb-3">通用HTTP Webhook适配器，支持POST/GET请求</p>
+            <div class="code-editor rounded-lg p-4 overflow-x-auto">
+              <pre class="text-xs"><code>// 标准入参: { title, content, type, userConfig }
+async function send({ title, content, type, userConfig }) {
+  const { webhookUrl, secret } = userConfig;
+  
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      title,
+      content,
+      type,
+      timestamp: Date.now(),
+      sign: generateSign(secret, title + content)
+    })
+  });
+  
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+  }
+  
+  return { success: true, messageId: await response.json().id };
+}</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== Routing 页面 ==================== -->
+      <div id="page-routing" class="page p-8">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h1 class="text-2xl font-bold text-zinc-900">Routing</h1>
+            <p class="text-sm text-zinc-500 mt-1">管理接收用户及其通知渠道配置。</p>
+          </div>
+          <button class="btn-primary flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            新建用户
+          </button>
+        </div>
+
+        <!-- 用户列表 -->
+        <div class="grid grid-cols-2 gap-6">
+          <div class="card rounded-2xl p-6">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold">张</div>
+                <div>
+                  <h4 class="font-semibold text-zinc-900">张三</h4>
+                  <p class="text-xs text-zinc-500">ID: user_001</p>
+                </div>
+              </div>
+              <div class="flex gap-2">
+                <button class="p-2 rounded-lg hover:bg-zinc-100">
+                  <svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                  </svg>
+                </button>
+                <button class="p-2 rounded-lg hover:bg-rose-50">
+                  <svg class="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="space-y-3">
+              <div class="flex items-center justify-between p-3 bg-zinc-50 rounded-lg">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm">📱</span>
+                  <span class="text-sm text-zinc-700">飞书</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="tag tag-green text-[10px]">已启用</span>
+                  <button class="text-xs text-zinc-500 hover:text-zinc-700">配置</button>
+                </div>
+              </div>
+              <div class="flex items-center justify-between p-3 bg-zinc-50 rounded-lg">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm">💬</span>
+                  <span class="text-sm text-zinc-700">钉钉</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="tag tag-green text-[10px]">已启用</span>
+                  <button class="text-xs text-zinc-500 hover:text-zinc-700">配置</button>
+                </div>
+              </div>
+              <div class="flex items-center justify-between p-3 bg-zinc-50 rounded-lg opacity-50">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm">🔔</span>
+                  <span class="text-sm text-zinc-700">Bark</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="tag text-[10px]">未启用</span>
+                  <button class="text-xs text-zinc-500 hover:text-zinc-700">配置</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card rounded-2xl p-6">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-rose-600 flex items-center justify-center text-white font-semibold">李</div>
+                <div>
+                  <h4 class="font-semibold text-zinc-900">李四</h4>
+                  <p class="text-xs text-zinc-500">ID: user_002</p>
+                </div>
+              </div>
+              <div class="flex gap-2">
+                <button class="p-2 rounded-lg hover:bg-zinc-100">
+                  <svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                  </svg>
+                </button>
+                <button class="p-2 rounded-lg hover:bg-rose-50">
+                  <svg class="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="space-y-3">
+              <div class="flex items-center justify-between p-3 bg-zinc-50 rounded-lg">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm">🏢</span>
+                  <span class="text-sm text-zinc-700">企业微信</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="tag tag-green text-[10px]">已启用</span>
+                  <button class="text-xs text-zinc-500 hover:text-zinc-700">配置</button>
+                </div>
+              </div>
+              <div class="flex items-center justify-between p-3 bg-zinc-50 rounded-lg">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm">📨</span>
+                  <span class="text-sm text-zinc-700">Pushplus</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="tag tag-green text-[10px]">已启用</span>
+                  <button class="text-xs text-zinc-500 hover:text-zinc-700">配置</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card rounded-2xl p-6">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center text-white font-semibold">王</div>
+                <div>
+                  <h4 class="font-semibold text-zinc-900">王五</h4>
+                  <p class="text-xs text-zinc-500">ID: user_003</p>
+                </div>
+              </div>
+              <div class="flex gap-2">
+                <button class="p-2 rounded-lg hover:bg-zinc-100">
+                  <svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                  </svg>
+                </button>
+                <button class="p-2 rounded-lg hover:bg-rose-50">
+                  <svg class="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="space-y-3">
+              <div class="flex items-center justify-between p-3 bg-zinc-50 rounded-lg">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm">📱</span>
+                  <span class="text-sm text-zinc-700">飞书</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="tag tag-green text-[10px]">已启用</span>
+                  <button class="text-xs text-zinc-500 hover:text-zinc-700">配置</button>
+                </div>
+              </div>
+              <div class="flex items-center justify-between p-3 bg-zinc-50 rounded-lg">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm">💬</span>
+                  <span class="text-sm text-zinc-700">钉钉</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="tag tag-green text-[10px]">已启用</span>
+                  <button class="text-xs text-zinc-500 hover:text-zinc-700">配置</button>
+                </div>
+              </div>
+              <div class="flex items-center justify-between p-3 bg-zinc-50 rounded-lg">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm">🏢</span>
+                  <span class="text-sm text-zinc-700">企业微信</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="tag tag-green text-[10px]">已启用</span>
+                  <button class="text-xs text-zinc-500 hover:text-zinc-700">配置</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== Logs 页面 ==================== -->
+      <div id="page-logs" class="page p-8">
+        <div class="mb-6">
+          <h1 class="text-2xl font-bold text-zinc-900">Logs</h1>
+          <p class="text-sm text-zinc-500 mt-1">系统操作日志、发送记录与错误详情。</p>
+        </div>
+
+        <!-- 日志筛选 -->
+        <div class="flex items-center gap-4 mb-6">
+          <div class="flex gap-2">
+            <button class="px-4 py-2 rounded-lg bg-zinc-900 text-white text-sm font-medium">全部</button>
+            <button class="px-4 py-2 rounded-lg bg-white/50 text-zinc-600 text-sm font-medium hover:bg-white/80">发送记录</button>
+            <button class="px-4 py-2 rounded-lg bg-white/50 text-zinc-600 text-sm font-medium hover:bg-white/80">系统操作</button>
+            <button class="px-4 py-2 rounded-lg bg-rose-50 text-rose-600 text-sm font-medium hover:bg-rose-100">错误日志</button>
+          </div>
+          <div class="flex-1"></div>
+          <button class="btn-secondary flex items-center gap-2 text-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+            </svg>
+            导出日志
+          </button>
+        </div>
+
+        <!-- 日志列表 -->
+        <div class="card rounded-2xl overflow-hidden">
+          <table class="w-full">
+            <thead class="bg-zinc-50/50">
+              <tr class="text-left text-xs text-zinc-500">
+                <th class="px-6 py-4 font-medium">时间</th>
+                <th class="px-6 py-4 font-medium">类型</th>
+                <th class="px-6 py-4 font-medium">任务/操作</th>
+                <th class="px-6 py-4 font-medium">用户</th>
+                <th class="px-6 py-4 font-medium">渠道</th>
+                <th class="px-6 py-4 font-medium">状态</th>
+                <th class="px-6 py-4 font-medium">详情</th>
+              </tr>
+            </thead>
+            <tbody class="text-sm">
+              <tr class="border-b border-zinc-100">
+                <td class="px-6 py-4 text-zinc-500">2024-01-15 10:05:22</td>
+                <td class="px-6 py-4"><span class="tag tag-blue">发送</span></td>
+                <td class="px-6 py-4 text-zinc-900">早间报表推送</td>
+                <td class="px-6 py-4 text-zinc-600">张三</td>
+                <td class="px-6 py-4 text-zinc-600">飞书</td>
+                <td class="px-6 py-4"><span class="tag tag-green">成功</span></td>
+                <td class="px-6 py-4">
+                  <button class="text-xs text-zinc-500 hover:text-zinc-900">查看</button>
+                </td>
+              </tr>
+              <tr class="border-b border-zinc-100">
+                <td class="px-6 py-4 text-zinc-500">2024-01-15 10:05:23</td>
+                <td class="px-6 py-4"><span class="tag tag-blue">发送</span></td>
+                <td class="px-6 py-4 text-zinc-900">早间报表推送</td>
+                <td class="px-6 py-4 text-zinc-600">李四</td>
+                <td class="px-6 py-4 text-zinc-600">企业微信</td>
+                <td class="px-6 py-4"><span class="tag tag-green">成功</span></td>
+                <td class="px-6 py-4">
+                  <button class="text-xs text-zinc-500 hover:text-zinc-900">查看</button>
+                </td>
+              </tr>
+              <tr class="border-b border-zinc-100 bg-rose-50/30">
+                <td class="px-6 py-4 text-zinc-500">2024-01-15 08:30:12</td>
+                <td class="px-6 py-4"><span class="tag tag-blue">发送</span></td>
+                <td class="px-6 py-4 text-zinc-900">服务器告警</td>
+                <td class="px-6 py-4 text-zinc-600">王五</td>
+                <td class="px-6 py-4 text-zinc-600">Bark</td>
+                <td class="px-6 py-4"><span class="tag tag-red">失败</span></td>
+                <td class="px-6 py-4">
+                  <button class="text-xs text-rose-600 hover:text-rose-800 font-medium">查看错误</button>
+                </td>
+              </tr>
+              <tr class="border-b border-zinc-100">
+                <td class="px-6 py-4 text-zinc-500">2024-01-15 08:30:45</td>
+                <td class="px-6 py-4"><span class="tag tag-yellow">重试</span></td>
+                <td class="px-6 py-4 text-zinc-900">服务器告警</td>
+                <td class="px-6 py-4 text-zinc-600">王五</td>
+                <td class="px-6 py-4 text-zinc-600">Bark</td>
+                <td class="px-6 py-4"><span class="tag tag-green">成功</span></td>
+                <td class="px-6 py-4">
+                  <button class="text-xs text-zinc-500 hover:text-zinc-900">查看</button>
+                </td>
+              </tr>
+              <tr class="border-b border-zinc-100">
+                <td class="px-6 py-4 text-zinc-500">2024-01-15 08:00:00</td>
+                <td class="px-6 py-4"><span class="tag">系统</span></td>
+                <td class="px-6 py-4 text-zinc-900">创建定时任务</td>
+                <td class="px-6 py-4 text-zinc-600">-</td>
+                <td class="px-6 py-4 text-zinc-600">-</td>
+                <td class="px-6 py-4"><span class="tag tag-green">成功</span></td>
+                <td class="px-6 py-4">
+                  <button class="text-xs text-zinc-500 hover:text-zinc-900">查看</button>
+                </td>
+              </tr>
+              <tr class="border-b border-zinc-100">
+                <td class="px-6 py-4 text-zinc-500">2024-01-15 07:30:15</td>
+                <td class="px-6 py-4"><span class="tag">系统</span></td>
+                <td class="px-6 py-4 text-zinc-900">更新渠道配置</td>
+                <td class="px-6 py-4 text-zinc-600">-</td>
+                <td class="px-6 py-4 text-zinc-600">飞书</td>
+                <td class="px-6 py-4"><span class="tag tag-green">成功</span></td>
+                <td class="px-6 py-4">
+                  <button class="text-xs text-zinc-500 hover:text-zinc-900">查看</button>
+                </td>
+              </tr>
+              <tr class="border-b border-zinc-100 bg-rose-50/30">
+                <td class="px-6 py-4 text-zinc-500">2024-01-15 06:15:33</td>
+                <td class="px-6 py-4"><span class="tag tag-blue">发送</span></td>
+                <td class="px-6 py-4 text-zinc-900">数据库备份通知</td>
+                <td class="px-6 py-4 text-zinc-600">张三</td>
+                <td class="px-6 py-4 text-zinc-600">钉钉</td>
+                <td class="px-6 py-4"><span class="tag tag-red">失败</span></td>
+                <td class="px-6 py-4">
+                  <button class="text-xs text-rose-600 hover:text-rose-800 font-medium">查看错误</button>
+                </td>
+              </tr>
+              <tr>
+                <td class="px-6 py-4 text-zinc-500">2024-01-15 06:16:05</td>
+                <td class="px-6 py-4"><span class="tag tag-yellow">重试</span></td>
+                <td class="px-6 py-4 text-zinc-900">数据库备份通知</td>
+                <td class="px-6 py-4 text-zinc-600">张三</td>
+                <td class="px-6 py-4 text-zinc-600">钉钉</td>
+                <td class="px-6 py-4"><span class="tag tag-red">失败</span></td>
+                <td class="px-6 py-4">
+                  <button class="text-xs text-rose-600 hover:text-rose-800 font-medium">查看错误</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 分页 -->
+        <div class="flex items-center justify-between mt-6">
+          <p class="text-sm text-zinc-500">显示 1-8 条，共 156 条记录</p>
+          <div class="flex gap-2">
+            <button class="px-3 py-1.5 rounded-lg bg-white/50 text-zinc-400 text-sm" disabled>上一页</button>
+            <button class="px-3 py-1.5 rounded-lg bg-zinc-900 text-white text-sm">1</button>
+            <button class="px-3 py-1.5 rounded-lg bg-white/50 text-zinc-600 text-sm hover:bg-white/80">2</button>
+            <button class="px-3 py-1.5 rounded-lg bg-white/50 text-zinc-600 text-sm hover:bg-white/80">3</button>
+            <span class="px-2 py-1.5 text-zinc-400">...</span>
+            <button class="px-3 py-1.5 rounded-lg bg-white/50 text-zinc-600 text-sm hover:bg-white/80">20</button>
+            <button class="px-3 py-1.5 rounded-lg bg-white/50 text-zinc-600 text-sm hover:bg-white/80">下一页</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // 主题切换
+    function toggleTheme() {
+      const html = document.documentElement;
+      html.classList.toggle('dark');
+      localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
+    }
+
+    // 初始化：读取用户偏好
+    (function () {
+      const saved = localStorage.getItem('theme');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (saved === 'dark' || (!saved && prefersDark)) {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+
+    function switchPage(pageName) {
+      // 隐藏所有页面
+      document.querySelectorAll('.page').forEach(page => {
+        page.classList.remove('active');
+      });
+      
+      // 显示目标页面
+      document.getElementById('page-' + pageName).classList.add('active');
+      
+      // 更新菜单状态
+      document.querySelectorAll('.menu-item').forEach(item => {
+        item.classList.remove('active');
+        item.classList.add('text-zinc-600');
+      });
+      document.getElementById('menu-' + pageName).classList.add('active');
+      document.getElementById('menu-' + pageName).classList.remove('text-zinc-600');
+      
+      // 更新页面标题
+      const titles = {
+        'overview': 'Dashboard',
+        'tasks': 'Tasks',
+        'channels': 'Channels',
+        'routing': 'Routing',
+        'logs': 'Logs'
+      };
+      document.getElementById('page-title').textContent = titles[pageName];
+    }
+  </script>
+</body>
+</html>
