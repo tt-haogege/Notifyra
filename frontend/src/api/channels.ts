@@ -1,6 +1,12 @@
 import client from './client';
 
-export type ChannelType = 'Bark' | 'ServerChan' | 'PushDeer' | 'Telegram' | 'Discord' | 'Slack' | 'WeCom' | 'DingTalk' | 'Feishu' | 'Email' | 'LINE' | 'Gitter' | 'Mattermost' | 'RocketChat' | 'MicrosoftTeams';
+export type ChannelType =
+  | 'wecom_webhook'
+  | 'feishu_webhook'
+  | 'dingtalk_webhook'
+  | 'bark'
+  | 'generic_webhook'
+  | 'pushplus';
 export type ChannelStatus = 'active' | 'disabled';
 
 export interface Channel {

@@ -5,35 +5,8 @@ import { Card } from '../components/common/Card';
 import { PageHeader } from '../components/layout/PageHeader';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { channelsApi } from '../api/channels';
+import { CHANNEL_CONFIG_FIELD_LABELS, CHANNEL_TYPE_LABELS } from '../constants/channelTypes';
 import { emitToast } from '../components/common/Toast';
-
-const typeMap: Record<string, string> = {
-  Bark: 'Bark',
-  ServerChan: 'Server酱',
-  PushDeer: 'PushDeer',
-  Telegram: 'Telegram',
-  Discord: 'Discord',
-  Slack: 'Slack',
-  WeCom: '企业微信',
-  DingTalk: '钉钉',
-  Feishu: '飞书',
-  Email: '邮件',
-  LINE: 'LINE',
-  Gitter: 'Gitter',
-  Mattermost: 'Mattermost',
-  RocketChat: 'RocketChat',
-  MicrosoftTeams: 'Teams',
-};
-
-const configFieldMap: Record<string, string> = {
-  url: 'Webhook URL',
-  token: 'Token',
-  channelId: '频道 ID',
-  botToken: 'Bot Token',
-  chatId: 'Chat ID',
-  webhookUrl: 'Webhook URL',
-  redirectUrl: '重定向 URL',
-};
 
 function maskToken(token: string) {
   if (token.length <= 16) return token;
@@ -86,7 +59,7 @@ export default function ChannelDetailPage() {
             <div className="detail-pair">
               <span className="muted-text">类型</span>
               <StatusBadge tone="blue">
-                {typeMap[channel.type] || channel.type}
+                {CHANNEL_TYPE_LABELS[channel.type] || channel.type}
               </StatusBadge>
             </div>
             <div className="detail-pair">
@@ -106,7 +79,7 @@ export default function ChannelDetailPage() {
           <div className="stack-gap">
             {channel.config && Object.entries(channel.config).map(([key, value]) => (
               <div key={key} className="detail-pair">
-                <span className="muted-text">{configFieldMap[key] || key}</span>
+                <span className="muted-text">{CHANNEL_CONFIG_FIELD_LABELS[key] || key}</span>
                 <span className="input-shell" style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {typeof value === 'string' && (key.includes('token') || key.includes('Token') || key.includes('password') || key.includes('secret'))
                     ? showToken ? value : '••••••••'

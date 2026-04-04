@@ -5,81 +5,28 @@ import { Card } from '../components/common/Card';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Select } from '../components/common/Select';
 import { channelsApi, type ChannelType, type CreateChannelDto, type UpdateChannelDto } from '../api/channels';
+import { CHANNEL_TYPE_OPTIONS } from '../constants/channelTypes';
 import { emitToast } from '../components/common/Toast';
 
-const channelTypes: { value: ChannelType; label: string }[] = [
-  { value: 'Bark', label: 'Bark' },
-  { value: 'ServerChan', label: 'Server酱' },
-  { value: 'PushDeer', label: 'PushDeer' },
-  { value: 'Telegram', label: 'Telegram' },
-  { value: 'Discord', label: 'Discord' },
-  { value: 'Slack', label: 'Slack' },
-  { value: 'WeCom', label: '企业微信' },
-  { value: 'DingTalk', label: '钉钉' },
-  { value: 'Feishu', label: '飞书' },
-  { value: 'Email', label: '邮件' },
-  { value: 'LINE', label: 'LINE' },
-  { value: 'Gitter', label: 'Gitter' },
-  { value: 'Mattermost', label: 'Mattermost' },
-  { value: 'RocketChat', label: 'RocketChat' },
-  { value: 'MicrosoftTeams', label: 'Microsoft Teams' },
-];
-
 const configFields: Record<ChannelType, { key: string; label: string; placeholder: string }[]> = {
-  Bark: [
-    { key: 'url', label: 'Bark URL', placeholder: 'https://api.day.app/你的Token' },
+  bark: [
+    { key: 'serverUrl', label: 'Bark Server URL', placeholder: 'https://api.day.app/你的Token' },
     { key: 'redirectUrl', label: '重定向 URL（可选）', placeholder: 'https://example.com' },
   ],
-  ServerChan: [
-    { key: 'token', label: 'Server酱 SendKey', placeholder: 'SCUxxx' },
+  wecom_webhook: [
+    { key: 'webhook', label: 'Webhook URL', placeholder: 'https://qyapi.weixin.qq.com/...' },
   ],
-  PushDeer: [
-    { key: 'endpoint', label: 'PushDeer Endpoint', placeholder: 'https://api2.pushdeer.com' },
-    { key: 'token', label: 'Push Token', placeholder: 'your-push-token' },
+  dingtalk_webhook: [
+    { key: 'webhook', label: 'Webhook URL', placeholder: 'https://oapi.dingtalk.com/...' },
   ],
-  Telegram: [
-    { key: 'botToken', label: 'Bot Token', placeholder: '123456:ABC-DEF...' },
-    { key: 'chatId', label: 'Chat ID', placeholder: '-1001234567890' },
+  feishu_webhook: [
+    { key: 'webhook', label: 'Webhook URL', placeholder: 'https://open.feishu.cn/...' },
   ],
-  Discord: [
-    { key: 'webhookUrl', label: 'Webhook URL', placeholder: 'https://discord.com/api/webhooks/...' },
+  generic_webhook: [
+    { key: 'webhook', label: 'Webhook URL', placeholder: 'https://example.com/webhook' },
   ],
-  Slack: [
-    { key: 'webhookUrl', label: 'Webhook URL', placeholder: 'https://hooks.slack.com/...' },
-  ],
-  WeCom: [
-    { key: 'webhookUrl', label: 'Webhook URL', placeholder: 'https://qyapi.weixin.qq.com/...' },
-  ],
-  DingTalk: [
-    { key: 'webhookUrl', label: 'Webhook URL', placeholder: 'https://oapi.dingtalk.com/...' },
-  ],
-  Feishu: [
-    { key: 'webhookUrl', label: 'Webhook URL', placeholder: 'https://open.feishu.cn/...' },
-  ],
-  Email: [
-    { key: 'host', label: 'SMTP Host', placeholder: 'smtp.example.com' },
-    { key: 'port', label: 'SMTP Port', placeholder: '587' },
-    { key: 'user', label: '用户名', placeholder: 'user@example.com' },
-    { key: 'password', label: '密码', placeholder: '••••••••' },
-    { key: 'from', label: '发件人', placeholder: 'notify@example.com' },
-    { key: 'to', label: '收件人', placeholder: 'receiver@example.com' },
-  ],
-  LINE: [
-    { key: 'channelSecret', label: 'Channel Secret', placeholder: '••••••••' },
-    { key: 'channelAccessToken', label: 'Channel Access Token', placeholder: '••••••••' },
-    { key: 'to', label: '用户 ID', placeholder: 'Uxxx' },
-  ],
-  Gitter: [
-    { key: 'webhookUrl', label: 'Webhook URL', placeholder: 'https://webhooks.gitter.im/...' },
-  ],
-  Mattermost: [
-    { key: 'webhookUrl', label: 'Webhook URL', placeholder: 'https://your-mattermost.com/hooks/...' },
-  ],
-  RocketChat: [
-    { key: 'webhookUrl', label: 'Webhook URL', placeholder: 'https://your-rocketchat.com/hooks/...' },
-  ],
-  MicrosoftTeams: [
-    { key: 'webhookUrl', label: 'Webhook URL', placeholder: 'https://outlook.office.com/webhook/...' },
+  pushplus: [
+    { key: 'token', label: 'PushPlus Token', placeholder: 'your-pushplus-token' },
   ],
 };
 
@@ -89,7 +36,7 @@ export default function ChannelFormPage() {
   const isEdit = !!id;
 
   const [name, setName] = useState('');
-  const [type, setType] = useState<ChannelType>('Bark');
+  const [type, setType] = useState<ChannelType>('bark');
   const [config, setConfig] = useState<Record<string, string>>({});
   const [retryCount, setRetryCount] = useState(0);
 
@@ -186,7 +133,7 @@ export default function ChannelFormPage() {
               className="input-shell full-width"
               value={type}
               onChange={(v) => setType(v as ChannelType)}
-              options={channelTypes}
+              options={CHANNEL_TYPE_OPTIONS}
             />
           </div>
           <div>

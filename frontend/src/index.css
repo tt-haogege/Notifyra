@@ -225,6 +225,13 @@ select.input-shell { appearance: none; -webkit-appearance: none; background-imag
 .metric-grid, .shortcut-grid, .form-grid, .filters-grid, .stats-strip { display: grid; gap: 12px; }
 .overview-grid, .detail-grid, .two-panel-layout, .test-module-top-layout { display: grid; gap: 24px; }
 .overview-grid, .detail-grid, .two-panel-layout { grid-template-columns: 1.15fr 0.85fr; }
+.test-module-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.test-module-layout > .stack-gap { min-width: 0; width: 100%; }
+.test-module-layout .card { min-width: 0; width: 100%; }
+.test-module-layout .code-tabs-header { min-width: 0; }
+.test-module-layout .code-tabs-nav { min-width: 0; flex-shrink: 0; }
+.test-module-layout .code-block { width: 100%; max-width: 100%; min-width: 0; }
+.two-panel-layout > * { min-width: 0; }
 .test-module-top-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
 .metric-grid, .shortcut-grid, .stats-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .form-grid.two-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -288,8 +295,9 @@ select.input-shell { appearance: none; -webkit-appearance: none; background-imag
 .tag-list { grid-auto-flow: column; justify-content: start; }
 .tag { background: #eff6ff; color: #1d4ed8; padding: 8px 16px; }
 .profile-row { display: flex; align-items: center; gap: 16px; }
-.code-tabs-nav { display: flex; gap: 8px; }
-.code-block { margin: 0; padding: 16px; background: #0f172a; color: #e2e8f0; border-radius: 16px; overflow: auto; font-size: 13px; line-height: 1.6; }
+.code-tabs-nav { display: flex; gap: 8px; flex-wrap: wrap; }
+.code-tab { min-width: 104px; justify-content: center; text-align: center; }
+.code-block { margin: 0; padding: 16px; background: #0f172a; color: #e2e8f0; border-radius: 16px; overflow: auto; font-size: 13px; line-height: 1.6; width: 100%; box-sizing: border-box; }
 .code-block.inline { background: #0f172a; }
 /* ── 10. Modals & Overlays ── */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.46); display: grid; place-items: center; padding: 24px; z-index: 20; }

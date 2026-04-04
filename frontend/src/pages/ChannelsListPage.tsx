@@ -9,24 +9,7 @@ import { Select } from '../components/common/Select';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { emitToast } from '../components/common/Toast';
 import { channelsApi, type Channel, type ChannelStatus } from '../api/channels';
-
-const typeMap: Record<string, string> = {
-  Bark: 'Bark',
-  ServerChan: 'Server酱',
-  PushDeer: 'PushDeer',
-  Telegram: 'Telegram',
-  Discord: 'Discord',
-  Slack: 'Slack',
-  WeCom: '企业微信',
-  DingTalk: '钉钉',
-  Feishu: '飞书',
-  Email: '邮件',
-  LINE: 'LINE',
-  Gitter: 'Gitter',
-  Mattermost: 'Mattermost',
-  RocketChat: 'RocketChat',
-  MicrosoftTeams: 'Teams',
-};
+import { CHANNEL_TYPE_LABELS, CHANNEL_TYPE_OPTIONS } from '../constants/channelTypes';
 
 export default function ChannelsListPage() {
   const queryClient = useQueryClient();
@@ -101,16 +84,7 @@ export default function ChannelsListPage() {
             onChange={(v) => { setTypeFilter(v); setPage(1); }}
             options={[
               { value: '', label: '类型：全部' },
-              { value: 'Bark', label: 'Bark' },
-              { value: 'ServerChan', label: 'Server酱' },
-              { value: 'PushDeer', label: 'PushDeer' },
-              { value: 'Telegram', label: 'Telegram' },
-              { value: 'Discord', label: 'Discord' },
-              { value: 'Slack', label: 'Slack' },
-              { value: 'WeCom', label: '企业微信' },
-              { value: 'DingTalk', label: '钉钉' },
-              { value: 'Feishu', label: '飞书' },
-              { value: 'Email', label: '邮件' },
+              ...CHANNEL_TYPE_OPTIONS,
             ]}
           />
         </div>
@@ -140,7 +114,7 @@ export default function ChannelsListPage() {
               </div>
               <div>
                 <StatusBadge tone="blue">
-                  {typeMap[ch.type] || ch.type}
+                  {CHANNEL_TYPE_LABELS[ch.type] || ch.type}
                 </StatusBadge>
               </div>
               <div>

@@ -131,6 +131,37 @@ describe('SendChannelService', () => {
     expect(result).toEqual({ success: true });
   });
 
+  it('passes normalized legacy type and config to matched driver', async () => {
+    mockPrisma.channel.findFirst.mockResolvedValue({
+      id: 'channel-1',
+      userId: 'user-1',
+      name: '飞书渠道',
+      type: 'Feishu',
+      status: 'active',
+      configJson: '{"webhookUrl":"https://example.com"}',
+      lastUsedAt: null,
+    });
+    (mockDriver.send as jest.Mock).mockResolvedValue({ success: true });
+    mockPrisma.channel.update.mockResolvedValue(undefined);
+
+    await service.send('user-1', 'channel-1', {
+      title: '测试标题',
+      content: '测试内容',
+    });
+
+    expect(mockRegistry.getDriver).toHaveBeenCalledWith('feishu_webhook');
+    expect(mockDriver.send).toHaveBeenCalledWith({
+      channel: expect.objectContaining({
+        id: 'channel-1',
+        name: '飞书渠道',
+        type: 'feishu_webhook',
+      }),
+      config: { webhook: 'https://example.com' },
+      title: '测试标题',
+      content: '测试内容',
+    });
+  });
+
   it('returns normalized failure result from driver', async () => {
     mockPrisma.channel.findFirst.mockResolvedValue({
       id: 'channel-1',

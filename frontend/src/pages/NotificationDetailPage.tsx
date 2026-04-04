@@ -5,6 +5,7 @@ import { Card } from '../components/common/Card';
 import { PageHeader } from '../components/layout/PageHeader';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { notificationsApi } from '../api/notifications';
+import { CHANNEL_TYPE_LABELS } from '../constants/channelTypes';
 
 const statusMap: Record<string, string> = {
   active: '活跃',
@@ -17,13 +18,6 @@ const triggerMap: Record<string, string> = {
   once: '单次',
   recurring: '循环',
   webhook: 'Webhook',
-};
-
-const channelTypeMap: Record<string, string> = {
-  Bark: 'Bark', ServerChan: 'Server酱', PushDeer: 'PushDeer',
-  Telegram: 'TG', Discord: 'Discord', Slack: 'Slack',
-  WeCom: '企微', DingTalk: '钉钉', Feishu: '飞书',
-  Email: '邮件', LINE: 'LINE',
 };
 
 export default function NotificationDetailPage() {
@@ -128,7 +122,7 @@ export default function NotificationDetailPage() {
           {notification.channels && notification.channels.length > 0 ? (
             <div className="tag-list">
               {notification.channels.map((ch) => (
-                <Link key={ch.id} to={`/channels/${ch.id}`} className="tag">{ch.name}（{channelTypeMap[ch.type] || ch.type}）</Link>
+                <Link key={ch.id} to={`/channels/${ch.id}`} className="tag">{ch.name}（{CHANNEL_TYPE_LABELS[ch.type as keyof typeof CHANNEL_TYPE_LABELS] || ch.type}）</Link>
               ))}
             </div>
           ) : (

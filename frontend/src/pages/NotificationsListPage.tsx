@@ -10,18 +10,12 @@ import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { emitToast } from '../components/common/Toast';
 import { notificationsApi } from '../api/notifications';
 import type { Notification as NotificationType } from '../api/notifications';
+import { CHANNEL_TYPE_LABELS } from '../constants/channelTypes';
 
 const triggerMap: Record<string, string> = {
   once: '单次',
   recurring: '循环',
   webhook: 'Webhook',
-};
-
-const channelTypeMap: Record<string, string> = {
-  Bark: 'Bark', ServerChan: 'Server酱', PushDeer: 'PushDeer',
-  Telegram: 'TG', Discord: 'Discord', Slack: 'Slack',
-  WeCom: '企微', DingTalk: '钉钉', Feishu: '飞书',
-  Email: '邮件', LINE: 'LINE',
 };
 
 export default function NotificationsListPage() {
@@ -138,7 +132,7 @@ export default function NotificationsListPage() {
                 {n.channels && n.channels.length > 0 ? (
                   <>
                     {n.channels.slice(0, 2).map((ch) => (
-                      <span key={ch.id} className="channel-tag">{ch.name}（{channelTypeMap[ch.type] || ch.type}）</span>
+                      <span key={ch.id} className="channel-tag">{ch.name}（{CHANNEL_TYPE_LABELS[ch.type as keyof typeof CHANNEL_TYPE_LABELS] || ch.type}）</span>
                     ))}
                     {n.channels.length > 2 && <span className="channel-tag-more">+{n.channels.length - 2}</span>}
                   </>

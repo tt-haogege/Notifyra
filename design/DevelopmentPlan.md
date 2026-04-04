@@ -299,6 +299,20 @@
 - 异常场景处理（网络异常、配置错误、Token 失效等）
 - 前后端错误提示统一
 - README 补充运行说明
+- 渠道兼容修复记录：`design/dev/ChannelCompatibilityFix-2026-04-04.md`
+  - 说明：本次已完成渠道 type / config key 历史兼容、新数据收敛、前端展示统一，以及相关测试与类型检查收尾
+
+### 渠道兼容修复补充记录（2026-04-04）
+- 背景：渠道测试发送 `/test/channel/:id/send` 曾因历史渠道 `type` 与 driver registry 的 canonical type 不一致而返回“暂不支持该渠道类型”。
+- 问题范围：不仅是 `type` 不一致，历史配置 key 也与后端 driver 实际要求不一致；若只修 type，不修 config key，发送链路仍会在 driver 层失败。
+- 实施方向：
+  - 后端在 channels 模块集中做 type / config 归一化，兼容历史数据并收敛新写入。
+  - 前端 API、表单、列表、详情、通知关联展示统一改为 canonical type 与真实配置字段。
+  - 前端抽取共享渠道展示映射，统一列表、详情、测试模块、通知页面的类型文案与筛选来源。
+  - 验证范围覆盖登录态测试发送、开放 token 发送、渠道筛选展示与相关单测。
+- 关联文档：
+  - 详细修复记录：`design/dev/ChannelCompatibilityFix-2026-04-04.md`
+  - 实施方案：`/Users/zhouhao/.claude/plans/federated-singing-nebula.md`
 
 ---
 

@@ -5,6 +5,10 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../shared/prisma/prisma.service';
+import {
+  normalizeChannelType,
+  parseChannelConfig,
+} from './channel-normalizer';
 import { ChannelDriverRegistry } from './drivers/channel-driver.registry';
 import { ChannelDriverSendResult } from './drivers/channel-driver.interface';
 
@@ -39,17 +43,18 @@ export class SendChannelService {
 
     let config: Record<string, unknown>;
     try {
-      config = JSON.parse(channel.configJson) as Record<string, unknown>;
+      config = parseChannelConfig(channel.type, channel.configJson);
     } catch {
       throw new BadRequestException('渠道配置格式不合法');
     }
 
-    const driver = this.driverRegistry.getDriver(channel.type);
+    const normalizedType = normalizeChannelType(channel.type);
+    const driver = this.driverRegistry.getDriver(normalizedType);
     const result = await driver.send({
       channel: {
         id: channel.id,
         name: channel.name,
-        type: channel.type,
+        type: normalizedType,
       },
       config,
       title: input.title,
@@ -106,17 +111,18 @@ export class SendChannelService {
 
     let config: Record<string, unknown>;
     try {
-      config = JSON.parse(channel.configJson) as Record<string, unknown>;
+      config = parseChannelConfig(channel.type, channel.configJson);
     } catch {
       throw new BadRequestException('渠道配置格式不合法');
     }
 
-    const driver = this.driverRegistry.getDriver(channel.type);
+    const normalizedType = normalizeChannelType(channel.type);
+    const driver = this.driverRegistry.getDriver(normalizedType);
     const result = await driver.send({
       channel: {
         id: channel.id,
         name: channel.name,
-        type: channel.type,
+        type: normalizedType,
       },
       config,
       title: input.title,

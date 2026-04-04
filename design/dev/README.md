@@ -33,6 +33,8 @@
   - git、提交、PR 与收尾约定
 - `DocumentationMaintenance.md`
   - 文档维护责任与更新规则
+- `ChannelCompatibilityFix-2026-04-04.md`
+  - 渠道兼容修复的实现记录、验证结果与后续回归建议
 
 ## 3. 使用规则
 

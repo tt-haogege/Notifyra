@@ -1,6 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ChannelsService } from './channels.service';
 import { PrismaService } from '../shared/prisma/prisma.service';
+import {
+  normalizeChannelType,
+  serializeChannelConfig,
+} from './channel-normalizer';
 
 describe('ChannelsService', () => {
   let service: ChannelsService;
@@ -50,7 +54,7 @@ describe('ChannelsService', () => {
         id: 'channel-1',
         userId: 'user-1',
         name: '飞书告警',
-        type: 'feishu',
+        type: 'feishu_webhook',
         configJson: '{"webhook":"https://example.com"}',
         status: 'active',
         retryCount: 3,
@@ -61,21 +65,27 @@ describe('ChannelsService', () => {
 
       const result = await service.create('user-1', {
         name: '飞书告警',
-        type: 'feishu',
-        configJson: '{"webhook":"https://example.com"}',
+        type: 'Feishu',
+        config: { webhookUrl: 'https://example.com' },
         retryCount: 3,
       });
 
       expect(result).toMatchObject({
         id: 'channel-1',
         name: '飞书告警',
-        type: 'feishu',
+        type: 'feishu_webhook',
         status: 'active',
         retryCount: 3,
         token: expect.any(String),
       });
       expect(result.tokenHash).toBeUndefined();
       expect(mockPrisma.channel.create).toHaveBeenCalled();
+      expect(mockPrisma.channel.create.mock.calls[0][0].data.type).toBe(
+        normalizeChannelType('Feishu'),
+      );
+      expect(mockPrisma.channel.create.mock.calls[0][0].data.configJson).toBe(
+        serializeChannelConfig('Feishu', { webhookUrl: 'https://example.com' }),
+      );
       expect(mockPrisma.channel.create.mock.calls[0][0].data.tokenHash).toEqual(
         expect.any(String),
       );
@@ -91,7 +101,7 @@ describe('ChannelsService', () => {
         {
           id: 'channel-1',
           name: '飞书告警',
-          type: 'feishu',
+          type: 'feishu_webhook',
           status: 'active',
           retryCount: 3,
           tokenHash: '$2b$10$hashed-token',
@@ -106,7 +116,7 @@ describe('ChannelsService', () => {
 
       const result = await service.list('user-1', {
         keyword: '飞书',
-        type: 'feishu',
+        type: 'Feishu',
         status: 'active',
         page: 1,
         pageSize: 10,
@@ -117,7 +127,7 @@ describe('ChannelsService', () => {
           expect.objectContaining({
             id: 'channel-1',
             name: '飞书告警',
-            type: 'feishu',
+            type: 'feishu_webhook',
             status: 'active',
             tokenEnabled: true,
             relatedNotificationCount: 1,
@@ -131,7 +141,7 @@ describe('ChannelsService', () => {
         expect.objectContaining({
           where: {
             userId: 'user-1',
-            type: 'feishu',
+            type: 'feishu_webhook',
             status: 'active',
             name: { contains: '飞书' },
           },
@@ -144,7 +154,7 @@ describe('ChannelsService', () => {
     it('returns channel detail with decrypted token for current user only', async () => {
       const createResult = await service.create('user-1', {
         name: '飞书告警',
-        type: 'feishu',
+        type: 'Feishu',
         configJson: '{"webhook":"https://example.com"}',
         retryCount: 3,
       });
@@ -154,7 +164,7 @@ describe('ChannelsService', () => {
         id: 'channel-1',
         userId: 'user-1',
         name: '飞书告警',
-        type: 'feishu',
+        type: 'feishu_webhook',
         configJson: '{"webhook":"https://example.com"}',
         status: 'active',
         retryCount: 3,
@@ -185,8 +195,8 @@ describe('ChannelsService', () => {
         id: 'channel-legacy',
         userId: 'user-1',
         name: '历史渠道',
-        type: 'feishu',
-        configJson: '{"webhook":"https://example.com"}',
+        type: 'Feishu',
+        configJson: '{"webhookUrl":"https://example.com"}',
         status: 'active',
         retryCount: 3,
         tokenHash: '$2b$10$hashed-token',
@@ -209,11 +219,12 @@ describe('ChannelsService', () => {
       mockPrisma.channel.findFirst.mockResolvedValueOnce({
         id: 'channel-1',
         userId: 'user-1',
+        type: 'feishu_webhook',
       });
       mockPrisma.channel.update.mockResolvedValue({
         id: 'channel-1',
         name: '飞书告警-更新',
-        type: 'feishu',
+        type: 'feishu_webhook',
         configJson: '{"webhook":"https://example.com/updated"}',
         status: 'active',
         retryCount: 2,
@@ -229,7 +240,13 @@ describe('ChannelsService', () => {
       });
 
       expect(result.name).toBe('飞书告警-更新');
-      expect(mockPrisma.channel.update).toHaveBeenCalled();
+      expect(mockPrisma.channel.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            configJson: '{"webhook":"https://example.com/updated"}',
+          }),
+        }),
+      );
     });
   });
 
@@ -247,7 +264,7 @@ describe('ChannelsService', () => {
       mockPrisma.channel.update.mockResolvedValue({
         id: 'channel-1',
         name: '飞书告警',
-        type: 'feishu',
+        type: 'feishu_webhook',
         configJson: '{"webhook":"https://example.com"}',
         status: 'disabled',
         retryCount: 3,
@@ -283,7 +300,7 @@ describe('ChannelsService', () => {
       mockPrisma.channel.update.mockResolvedValue({
         id: 'channel-1',
         name: '飞书告警',
-        type: 'feishu',
+        type: 'feishu_webhook',
         configJson: '{"webhook":"https://example.com"}',
         status: 'disabled',
         retryCount: 3,
@@ -323,7 +340,7 @@ describe('ChannelsService', () => {
       mockPrisma.channel.update.mockResolvedValue({
         id: 'channel-1',
         name: '飞书告警',
-        type: 'feishu',
+        type: 'feishu_webhook',
         configJson: '{"webhook":"https://example.com"}',
         status: 'active',
         retryCount: 3,

@@ -9,20 +9,15 @@ import {
 export class BarkDriver extends GenericWebhookDriver {
   readonly type: 'bark' = 'bark';
 
-  async send(
-    input: ChannelDriverSendInput,
-  ): Promise<ChannelDriverSendResult> {
+  async send(input: ChannelDriverSendInput): Promise<ChannelDriverSendResult> {
     const serverUrl = this.getRequiredStringConfig(input, 'serverUrl');
     if (typeof serverUrl !== 'string') {
       return serverUrl;
     }
 
     return this.postJson({
-      url: `${serverUrl.replace(/\/+$/, '')}/push`,
-      body: {
-        title: input.title,
-        body: input.content,
-      },
+      url: `${serverUrl.replace(/\/+$/, '')}/${input.title}/${input.content}`,
+      body: {},
       parseResponse: async (response) => {
         if (!response.ok) {
           return {
@@ -31,9 +26,10 @@ export class BarkDriver extends GenericWebhookDriver {
           };
         }
 
-        const raw = await this.parseJsonResponse<{ code?: number; message?: string }>(
-          response,
-        );
+        const raw = await this.parseJsonResponse<{
+          code?: number;
+          message?: string;
+        }>(response);
         if (this.isSendFailure(raw)) {
           return raw;
         }

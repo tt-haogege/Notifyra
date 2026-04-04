@@ -10,6 +10,11 @@ import {
   decryptChannelToken,
   encryptChannelToken,
 } from '../shared/token-crypto';
+import {
+  normalizeChannelType,
+  parseChannelConfig,
+  serializeChannelConfig,
+} from './channel-normalizer';
 import { CreateChannelDto } from './dto/create-channel.dto';
 import { ListChannelsQueryDto } from './dto/list-channels.query.dto';
 import { UpdateChannelDto } from './dto/update-channel.dto';
@@ -23,15 +28,18 @@ export class ChannelsService {
     const token = this.generateToken();
     const tokenHash = await bcrypt.hash(token, 10);
     const tokenEncrypted = encryptChannelToken(token);
+    const normalizedType = normalizeChannelType(dto.type);
 
     const channel = await this.prisma.channel.create({
       data: {
         userId,
         name: dto.name,
-        type: dto.type,
+        type: normalizedType,
         configJson: dto.config
-          ? JSON.stringify(dto.config)
-          : (dto.configJson ?? '{}'),
+          ? serializeChannelConfig(normalizedType, dto.config)
+          : dto.configJson
+            ? serializeChannelConfig(normalizedType, parseChannelConfig(normalizedType, dto.configJson))
+            : '{}',
         retryCount: dto.retryCount ?? 0,
         status: 'active',
         tokenHash,
@@ -58,7 +66,7 @@ export class ChannelsService {
     const pageSize = query.pageSize ?? 10;
     const where = {
       userId,
-      ...(query.type ? { type: query.type } : {}),
+      ...(query.type ? { type: normalizeChannelType(query.type) } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.keyword ? { name: { contains: query.keyword } } : {}),
     };
@@ -137,7 +145,13 @@ export class ChannelsService {
       lastUsedAt: channel.lastUsedAt,
       createdAt: channel.createdAt,
       updatedAt: channel.updatedAt,
-      config: (() => { try { return JSON.parse(channel.configJson); } catch { return {}; } })(),
+      config: (() => {
+        try {
+          return parseChannelConfig(channel.type, channel.configJson);
+        } catch {
+          return {};
+        }
+      })(),
       token: channel.tokenEncrypted ? decryptChannelToken(channel.tokenEncrypted) : null,
       tokenEnabled: Boolean(channel.tokenEncrypted || channel.tokenHash),
       relatedNotifications: channel.notifications.map((item) => item.notification),
@@ -145,13 +159,19 @@ export class ChannelsService {
   }
 
   async update(userId: string, id: string, dto: UpdateChannelDto) {
-    await this.ensureChannelExists(userId, id);
+    const existing = await this.ensureChannelExists(userId, id);
 
     const updateData: Record<string, unknown> = {};
     if (dto.name !== undefined) updateData.name = dto.name;
     if (dto.retryCount !== undefined) updateData.retryCount = dto.retryCount;
-    if (dto.config !== undefined) updateData.configJson = JSON.stringify(dto.config);
-    else if (dto.configJson !== undefined) updateData.configJson = dto.configJson;
+    if (dto.config !== undefined) {
+      updateData.configJson = serializeChannelConfig(existing.type, dto.config);
+    } else if (dto.configJson !== undefined) {
+      updateData.configJson = serializeChannelConfig(
+        existing.type,
+        parseChannelConfig(existing.type, dto.configJson),
+      );
+    }
 
     return this.prisma.channel.update({
       where: { id },
@@ -270,6 +290,7 @@ export class ChannelsService {
       select: {
         id: true,
         userId: true,
+        type: true,
         status: true,
       },
     });

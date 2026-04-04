@@ -9,16 +9,10 @@ import { channelsApi } from '../api/channels';
 import { notificationsApi } from '../api/notifications';
 import { testApi } from '../api/test';
 import { emitToast } from '../components/common/Toast';
+import { CHANNEL_TYPE_LABELS } from '../constants/channelTypes';
 
 type TestTab = 'notification' | 'channel';
 type CodeLang = 'curl' | 'javascript' | 'python';
-
-const typeMap: Record<string, string> = {
-  Bark: 'Bark', ServerChan: 'Server酱', PushDeer: 'PushDeer',
-  Telegram: 'TG', Discord: 'Discord', Slack: 'Slack',
-  WeCom: '企微', DingTalk: '钉钉', Feishu: '飞书',
-  Email: '邮件', LINE: 'LINE',
-};
 
 export default function TestModulePage() {
   const [tab, setTab] = useState<TestTab>('channel');
@@ -118,8 +112,8 @@ export default function TestModulePage() {
           测试渠道
         </button>
       </div>
-      <div className="two-panel-layout">
-        <div style={{ display: 'grid', gap: 24 }}>
+      <div className="two-panel-layout test-module-layout">
+        <div className="stack-gap" style={{ minWidth: 0 }}>
           {tab === 'channel' ? (
             <Card className="stack-gap">
               <div>
@@ -134,7 +128,7 @@ export default function TestModulePage() {
                   onChange={setChannelId}
                   options={[
                     { value: '', label: '请选择渠道...' },
-                    ...activeChannels.map((ch) => ({ value: ch.id, label: `${ch.name}（${typeMap[ch.type] || ch.type}）` })),
+                    ...activeChannels.map((ch) => ({ value: ch.id, label: `${ch.name}（${CHANNEL_TYPE_LABELS[ch.type] || ch.type}）` })),
                   ]}
                 />
               </div>
@@ -216,7 +210,7 @@ export default function TestModulePage() {
                   activeChannels.map((ch) => (
                     <div className="recent-row" key={ch.id}>
                       <span className="row-title">{ch.name}</span>
-                      <StatusBadge tone="blue">{typeMap[ch.type] || ch.type}</StatusBadge>
+                      <StatusBadge tone="blue">{CHANNEL_TYPE_LABELS[ch.type] || ch.type}</StatusBadge>
                       <StatusBadge tone="green">活跃</StatusBadge>
                     </div>
                   ))
@@ -245,7 +239,7 @@ export default function TestModulePage() {
           )}
         </div>
 
-        <div style={{ display: 'grid', gap: 24 }}>
+        <div className="stack-gap" style={{ minWidth: 0 }}>
           <Card>
             <div className="code-tabs-header">
               <h3>示例代码</h3>
