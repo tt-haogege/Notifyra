@@ -1,0 +1,156 @@
+// Prisma schema for Notifyra V1
+// Aligned with TechnicalDesign.md section 8
+
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "library"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  password  String
+  email     String?
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  settings      UserSettings?
+  channels     Channel[]
+  notifications Notification[]
+  pushRecords  PushRecord[]
+  aiSessions   AiSession[]
+}
+
+model UserSettings {
+  id                  String  @id @default(uuid())
+  userId             String  @unique
+  aiBaseUrl          String?
+  aiApiKeyEncrypted  String?
+  aiModel            String?
+  afternoonTime      String?
+  eveningTime        String?
+  tomorrowMorningTime String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Channel {
+  id             String   @id @default(uuid())
+  userId         String
+  name           String
+  type           String
+  configJson     String
+  status         String   @default("active")
+  retryCount     Int      @default(3)
+  tokenHash      String?
+  tokenEncrypted String?
+  lastUsedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notifications   NotificationChannel[]
+  pushRecords     PushRecord[]
+  channelResults  ChannelPushResult[]
+}
+
+model Notification {
+  id               String    @id @default(uuid())
+  userId           String
+  name             String
+  triggerType      String
+  title            String
+  content          String
+  triggerJson      String
+  status           String    @default("active")
+  webhookToken     String?
+  webhookTokenHash String?
+  nextTriggerAt    DateTime?
+  stopReason       String?
+  createdBy        String    @default("manual")
+  note             String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channels     NotificationChannel[]
+  pushRecords  PushRecord[]
+  webhookLogs  WebhookRequestLog[]
+}
+
+model NotificationChannel {
+  id             String @id @default(uuid())
+  notificationId String
+  channelId      String
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  channel     Channel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, channelId])
+}
+
+model PushRecord {
+  id              String    @id @default(uuid())
+  userId          String
+  notificationId  String?
+  channelId       String
+  source          String
+  titleSnapshot   String
+  contentSnapshot String
+  result          String
+  errorSummary    String?
+  pushedAt        DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notification  Notification?          @relation(fields: [notificationId], references: [id], onDelete: SetNull)
+  channel       Channel               @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channelResults ChannelPushResult[]
+  webhookLog    WebhookRequestLog?
+}
+
+model ChannelPushResult {
+  id            String  @id @default(uuid())
+  pushRecordId  String
+  channelId     String
+  result        String
+  errorMessage  String?
+  retryAttempts Int     @default(0)
+  createdAt     DateTime @default(now())
+
+  pushRecord PushRecord @relation(fields: [pushRecordId], references: [id], onDelete: Cascade)
+  channel    Channel     @relation(fields: [channelId], references: [id], onDelete: Cascade)
+}
+
+model WebhookRequestLog {
+  id              String   @id @default(uuid())
+  pushRecordId    String?  @unique
+  notificationId  String
+  sourceIp        String?
+  requestBodyJson String
+  requestedAt     DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  pushRecord   PushRecord?   @relation(fields: [pushRecordId], references: [id], onDelete: SetNull)
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+}
+
+model AiSession {
+  id                     String   @id @default(uuid())
+  userId                 String
+  status                 String   @default("collecting")
+  messagesJson           String   @default("[]")
+  collectedParamsJson    String   @default("{}")
+  createdNotificationId   String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
