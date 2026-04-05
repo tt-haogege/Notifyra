@@ -12,9 +12,10 @@ interface SelectProps {
   options: Option[];
   placeholder?: string;
   className?: string;
+  dropdownClassName?: string;
 }
 
-export function Select({ value, onChange, options, placeholder = '请选择', className }: SelectProps) {
+export function Select({ value, onChange, options, placeholder = '请选择', className, dropdownClassName }: SelectProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownId = useRef(`select-${Math.random().toString(36).slice(2)}`);
@@ -39,6 +40,7 @@ export function Select({ value, onChange, options, placeholder = '请选择', cl
   const dropdown = open ? (
     <div
       id={dropdownId.current}
+      className={dropdownClassName}
       style={{
         position: 'fixed',
         top: rect ? rect.bottom + 4 : 0,

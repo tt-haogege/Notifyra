@@ -4,22 +4,62 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card } from '../components/common/Card';
 import { PageHeader } from '../components/layout/PageHeader';
 import { TriggerTypeSelector } from '../components/common/TriggerTypeSelector';
+import { DateTimePopover } from '../components/common/DateTimePopover';
 import { notificationsApi } from '../api/notifications';
 import { channelsApi } from '../api/channels';
 import { emitToast } from '../components/common/Toast';
 import type { Notification } from '../api/notifications';
 
+const padNumber = (value: number) => value.toString().padStart(2, '0');
+
+const formatDateValue = (date: Date) =>
+  `${date.getFullYear()}-${padNumber(date.getMonth() + 1)}-${padNumber(date.getDate())}`;
+
+const parseScheduleParts = (value: string) => {
+  if (!value) return { date: '', hour: '', minute: '', second: '' };
+
+  const normalized = value.replace(' ', 'T');
+  const matched = normalized.match(/^(\d{4}-\d{2}-\d{2})T?(\d{2})?:(\d{2})?(?::(\d{2}))?/);
+  if (matched) {
+    return {
+      date: matched[1] ?? '',
+      hour: matched[2] ?? '',
+      minute: matched[3] ?? '',
+      second: matched[4] ?? '',
+    };
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return { date: '', hour: '', minute: '', second: '' };
+
+  return {
+    date: formatDateValue(parsed),
+    hour: padNumber(parsed.getHours()),
+    minute: padNumber(parsed.getMinutes()),
+    second: padNumber(parsed.getSeconds()),
+  };
+};
+
+const buildScheduleAt = (date: string, hour: string, minute: string, second: string) => {
+  if (!date || !hour || !minute || !second) return '';
+  return `${date}T${hour}:${minute}:${second}`;
+};
+
 export default function NotificationFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isEdit = !!id;
+  const todayValue = formatDateValue(new Date());
 
   const [name, setName] = useState('');
   const [triggerType, setTriggerType] = useState<Notification['triggerType']>('once');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
-  const [scheduleAt, setScheduleAt] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedHour, setSelectedHour] = useState('09');
+  const [selectedMinute, setSelectedMinute] = useState('00');
+  const [selectedSecond, setSelectedSecond] = useState('00');
   const [cronExpression, setCronExpression] = useState('');
 
   const { data: channels } = useQuery({
@@ -34,18 +74,37 @@ export default function NotificationFormPage() {
   });
 
   useEffect(() => {
+    if (!isEdit) {
+      setName('');
+      setTriggerType('once');
+      setTitle('');
+      setContent('');
+      setSelectedChannels([]);
+      setSelectedDate(todayValue);
+      setSelectedHour('09');
+      setSelectedMinute('00');
+      setSelectedSecond('00');
+      setCronExpression('');
+      return;
+    }
+
     if (existing) {
       setName(existing.name);
       setTriggerType(existing.triggerType);
       setTitle(existing.title);
       setContent(existing.content);
       setSelectedChannels(existing.channels?.map((c) => c.id) ?? (existing.channelIds ?? []));
-      if (existing.triggerConfig.executeAt || existing.triggerConfig.scheduleAt) {
-        setScheduleAt(existing.triggerConfig.executeAt ?? existing.triggerConfig.scheduleAt ?? '');
-      }
-      if (existing.triggerConfig.cron) setCronExpression(existing.triggerConfig.cron);
+
+      const scheduleValue = existing.triggerConfig.executeAt ?? existing.triggerConfig.scheduleAt ?? '';
+      const parsedSchedule = parseScheduleParts(scheduleValue);
+      const nextDate = parsedSchedule.date || todayValue;
+      setSelectedDate(nextDate);
+      setSelectedHour(parsedSchedule.hour || '09');
+      setSelectedMinute(parsedSchedule.minute || '00');
+      setSelectedSecond(parsedSchedule.second || '00');
+      setCronExpression(existing.triggerConfig.cron ?? '');
     }
-  }, [existing]);
+  }, [existing, isEdit, todayValue]);
 
   const activeChannels = channels?.items.filter((c) => c.status === 'active') ?? [];
 
@@ -72,8 +131,20 @@ export default function NotificationFormPage() {
   };
 
   const handleSubmit = () => {
+    if (selectedChannels.length === 0) {
+      emitToast('请选择至少一个发送渠道', 'error');
+      return;
+    }
+
     const triggerConfig: Notification['triggerConfig'] = {};
-    if (triggerType === 'once') triggerConfig.executeAt = scheduleAt;
+    if (triggerType === 'once') {
+      const executeAt = buildScheduleAt(selectedDate, selectedHour, selectedMinute, selectedSecond);
+      if (!executeAt) {
+        emitToast('请选择完整的触发时间', 'error');
+        return;
+      }
+      triggerConfig.executeAt = executeAt;
+    }
     if (triggerType === 'recurring') triggerConfig.cron = cronExpression;
 
     const payload = { name, triggerType, title, content, channelIds: selectedChannels, triggerConfig };
@@ -98,7 +169,7 @@ export default function NotificationFormPage() {
         <div>
           <div className="field-label">触发类型</div>
           <TriggerTypeSelector value={triggerType} onChange={setTriggerType} />
-          <p className="helper-text">不同触发类型会显示不同的触发时间配置方式。</p>
+          <p className="helper-text">不同触发类型会显示不同的触发时间配置方式；单次通知支持精确到秒。</p>
         </div>
         <div className="form-grid two-columns">
           <div>
@@ -124,22 +195,32 @@ export default function NotificationFormPage() {
                 </div>
               ) : '暂无可用渠道'}
             </div>
+            <p className="helper-text">请主动选择至少一个启用中的发送渠道。</p>
           </div>
           <div>
             <div className="field-label">标题</div>
             <input className="input-shell full-width" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="请输入通知标题" />
           </div>
           {triggerType !== 'webhook' && (
-          <div>
-            <div className="field-label">触发时间</div>
-            <div className="input-shell highlight">
-              {triggerType === 'once' ? (
-                <input type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} style={{ background: 'transparent', border: 'none', outline: 'none', width: '100%', color: 'inherit' }} />
-              ) : (
-                <input className="full-width" value={cronExpression} onChange={(e) => setCronExpression(e.target.value)} placeholder="0 * * * *" style={{ background: 'transparent', border: 'none', outline: 'none', color: 'inherit' }} />
-              )}
+            <div>
+              <div className="field-label">触发时间</div>
+              <div className="input-shell highlight stack-gap">
+                {triggerType === 'once' ? (
+                  <DateTimePopover
+                    value={{ date: selectedDate, hour: selectedHour, minute: selectedMinute, second: selectedSecond }}
+                    minDate={todayValue}
+                    onConfirm={({ date, hour, minute, second }) => {
+                      setSelectedDate(date);
+                      setSelectedHour(hour);
+                      setSelectedMinute(minute);
+                      setSelectedSecond(second);
+                    }}
+                  />
+                ) : (
+                  <input className="full-width" value={cronExpression} onChange={(e) => setCronExpression(e.target.value)} placeholder="0 * * * *" style={{ background: 'transparent', border: 'none', outline: 'none', color: 'inherit' }} />
+                )}
+              </div>
             </div>
-          </div>
           )}
         </div>
         <div>

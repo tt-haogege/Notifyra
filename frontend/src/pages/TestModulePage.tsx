@@ -241,7 +241,7 @@ export default function TestModulePage() {
 
         <div className="stack-gap" style={{ minWidth: 0 }}>
           <Card>
-            <div className="code-tabs-header">
+            <div className="code-tabs-header" style={{ marginBottom: 6 }}>
               <h3>示例代码</h3>
               <div className="code-tabs-nav">
                 {(['curl', 'javascript', 'python'] as CodeLang[]).map((lang) => (
