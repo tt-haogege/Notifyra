@@ -6,7 +6,7 @@ import { PageHeader } from '../components/layout/PageHeader';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { channelsApi } from '../api/channels';
 import { CHANNEL_CONFIG_FIELD_LABELS, CHANNEL_TYPE_LABELS } from '../constants/channelTypes';
-import { emitToast } from '../components/common/Toast';
+import { emitToast } from '../components/common/toast-events';
 
 function maskToken(token: string) {
   if (token.length <= 16) return token;

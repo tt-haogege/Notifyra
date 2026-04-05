@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
-
-type ToastType = 'success' | 'error' | 'info';
+import { useState, useCallback, useEffect, type ReactNode } from 'react';
+import { TOAST_EVENT, type ToastType } from './toast-events';
+import { ToastContext } from './toast-context';
 
 interface ToastItem {
   id: number;
@@ -8,18 +8,6 @@ interface ToastItem {
   type: ToastType;
   leaving?: boolean;
 }
-
-interface ToastContextValue {
-  toast: (message: string, type?: ToastType) => void;
-}
-
-const TOAST_EVENT = 'app-toast';
-
-export function emitToast(message: string, type: ToastType = 'info') {
-  window.dispatchEvent(new CustomEvent(TOAST_EVENT, { detail: { message, type } }));
-}
-
-const ToastContext = createContext<ToastContextValue>({ toast: () => {} });
 
 let nextId = 1;
 
@@ -101,5 +89,3 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     </ToastContext.Provider>
   );
 }
-
-export const useToast = () => useContext(ToastContext);

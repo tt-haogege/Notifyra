@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@theme {
+  --color-app-text: var(--sidebar-text);
+  --color-app-muted: var(--text-secondary);
+  --color-app-border: var(--border);
+  --color-app-surface: var(--surface);
+  --color-app-surface-strong: var(--surface-strong);
+  --color-app-input: var(--input-bg);
+  --color-app-input-border: var(--input-border);
+  --color-app-input-text: var(--input-text);
+  --color-app-primary: var(--primary);
+  --color-app-primary-strong: var(--primary-strong);
+  --color-app-success: var(--success);
+  --color-app-danger: var(--danger);
+  --color-app-warning: var(--warning);
+}

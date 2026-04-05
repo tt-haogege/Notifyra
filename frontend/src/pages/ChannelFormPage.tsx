@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card } from '../components/common/Card';
@@ -6,7 +6,7 @@ import { PageHeader } from '../components/layout/PageHeader';
 import { Select } from '../components/common/Select';
 import { channelsApi, type ChannelType, type CreateChannelDto, type UpdateChannelDto } from '../api/channels';
 import { CHANNEL_TYPE_OPTIONS } from '../constants/channelTypes';
-import { emitToast } from '../components/common/Toast';
+import { emitToast } from '../components/common/toast-events';
 
 const configFields: Record<ChannelType, { key: string; label: string; placeholder: string }[]> = {
   bark: [
@@ -30,15 +30,26 @@ const configFields: Record<ChannelType, { key: string; label: string; placeholde
   ],
 };
 
+const toFlatConfig = (config: Record<string, unknown> | null | undefined) => {
+  const flatConfig: Record<string, string> = {};
+  if (!config) return flatConfig;
+  Object.entries(config).forEach(([key, value]) => {
+    flatConfig[key] = String(value);
+  });
+  return flatConfig;
+};
+
 export default function ChannelFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isEdit = !!id;
 
-  const [name, setName] = useState('');
-  const [type, setType] = useState<ChannelType>('bark');
-  const [config, setConfig] = useState<Record<string, string>>({});
-  const [retryCount, setRetryCount] = useState(0);
+  const [draft, setDraft] = useState<{
+    name?: string;
+    type?: ChannelType;
+    config?: Record<string, string>;
+    retryCount?: number;
+  }>({});
 
   const { data: existing } = useQuery({
     queryKey: ['channel', id],
@@ -46,20 +57,11 @@ export default function ChannelFormPage() {
     enabled: isEdit,
   });
 
-  useEffect(() => {
-    if (existing) {
-      setName(existing.name);
-      setType(existing.type);
-      const flatConfig: Record<string, string> = {};
-      if (existing.config) {
-        Object.entries(existing.config).forEach(([k, v]) => {
-          flatConfig[k] = String(v);
-        });
-      }
-      setConfig(flatConfig);
-      setRetryCount(existing.retryCount ?? 3);
-    }
-  }, [existing]);
+  const existingConfig = toFlatConfig(existing?.config);
+  const name = draft.name ?? existing?.name ?? '';
+  const type = draft.type ?? existing?.type ?? 'bark';
+  const config = draft.config ?? existingConfig;
+  const retryCount = draft.retryCount ?? (existing ? (existing.retryCount ?? 3) : 0);
 
   const createMutation = useMutation({
     mutationFn: (data: CreateChannelDto) => channelsApi.create(data),
@@ -78,7 +80,10 @@ export default function ChannelFormPage() {
   });
 
   const updateConfig = (key: string, value: string) => {
-    setConfig((prev) => ({ ...prev, [key]: value }));
+    setDraft((prev) => ({
+      ...prev,
+      config: { ...(prev.config ?? config), [key]: value },
+    }));
   };
 
   const handleSubmit = () => {
@@ -123,7 +128,7 @@ export default function ChannelFormPage() {
             <input
               className="input-shell full-width"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))}
               placeholder="请输入渠道名称"
             />
           </div>
@@ -132,7 +137,7 @@ export default function ChannelFormPage() {
             <Select
               className="input-shell full-width"
               value={type}
-              onChange={(v) => setType(v as ChannelType)}
+              onChange={(value) => setDraft((prev) => ({ ...prev, type: value as ChannelType }))}
               options={CHANNEL_TYPE_OPTIONS}
             />
           </div>
@@ -142,7 +147,7 @@ export default function ChannelFormPage() {
               className="input-shell full-width"
               type="number"
               value={retryCount}
-              onChange={(e) => setRetryCount(Number(e.target.value))}
+              onChange={(e) => setDraft((prev) => ({ ...prev, retryCount: Number(e.target.value) }))}
               min={0}
               max={3}
             />

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { emitToast } from '../components/common/Toast';
+import { emitToast } from '../components/common/toast-events';
 
 const client = axios.create({
   baseURL: '/api',

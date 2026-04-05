@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/common/Card';
 import { PageHeader } from '../components/layout/PageHeader';
-import { useToast } from '../components/common/Toast';
+import { useToast } from '../components/common/toast-context';
 import { authApi } from '../api/auth';
 import { settingsApi } from '../api/settings';
 
@@ -44,6 +44,20 @@ function AvatarCircle({ username, avatar, size = 56 }: { username: string; avata
   );
 }
 
+const getSettingsDraft = (settings?: {
+  aiBaseUrl?: string | null;
+  aiModel?: string | null;
+  afternoonTime?: string | null;
+  eveningTime?: string | null;
+  tomorrowMorningTime?: string | null;
+}) => ({
+  aiBaseUrl: settings?.aiBaseUrl || '',
+  aiModel: settings?.aiModel || '',
+  afternoonTime: settings?.afternoonTime || '',
+  eveningTime: settings?.eveningTime || '',
+  tomorrowMorningTime: settings?.tomorrowMorningTime || '',
+});
+
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -63,13 +77,25 @@ export default function SettingsPage() {
 
   // Local avatar preview (before upload)
   const [pendingAvatar, setPendingAvatar] = useState<string | null>(null);
-
-  const [aiBaseUrl, setAiBaseUrl] = useState('');
+  const [draft, setDraft] = useState(() => ({ sourceKey: 'initial', ...getSettingsDraft() }));
   const [aiApiKey, setAiApiKey] = useState('');
-  const [aiModel, setAiModel] = useState('');
-  const [afternoonTime, setAfternoonTime] = useState('');
-  const [eveningTime, setEveningTime] = useState('');
-  const [tomorrowMorningTime, setTomorrowMorningTime] = useState('');
+
+  const settingsSourceKey = settings
+    ? JSON.stringify([
+        settings.aiBaseUrl ?? '',
+        settings.aiModel ?? '',
+        settings.afternoonTime ?? '',
+        settings.eveningTime ?? '',
+        settings.tomorrowMorningTime ?? '',
+      ])
+    : 'loading';
+  const hydratedDraft = { sourceKey: settingsSourceKey, ...getSettingsDraft(settings) };
+  const currentDraft = draft.sourceKey === settingsSourceKey ? draft : hydratedDraft;
+  const aiBaseUrl = currentDraft.aiBaseUrl;
+  const aiModel = currentDraft.aiModel;
+  const afternoonTime = currentDraft.afternoonTime;
+  const eveningTime = currentDraft.eveningTime;
+  const tomorrowMorningTime = currentDraft.tomorrowMorningTime;
 
   // Password
   const [oldPassword, setOldPassword] = useState('');
@@ -77,16 +103,6 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
-
-  useEffect(() => {
-    if (settings) {
-      setAiBaseUrl(settings.aiBaseUrl || '');
-      setAiModel(settings.aiModel || '');
-      setAfternoonTime(settings.afternoonTime || '');
-      setEveningTime(settings.eveningTime || '');
-      setTomorrowMorningTime(settings.tomorrowMorningTime || '');
-    }
-  }, [settings]);
 
   // Upload avatar mutation
   const uploadAvatarMutation = useMutation({
@@ -332,7 +348,7 @@ export default function SettingsPage() {
             <input
               className="input-shell full-width"
               value={afternoonTime}
-              onChange={(e) => setAfternoonTime(e.target.value)}
+              onChange={(e) => setDraft((prev) => ({ ...currentDraft, ...prev, afternoonTime: e.target.value }))}
               placeholder="例如 14:00"
             />
           </div>
@@ -341,7 +357,7 @@ export default function SettingsPage() {
             <input
               className="input-shell full-width"
               value={eveningTime}
-              onChange={(e) => setEveningTime(e.target.value)}
+              onChange={(e) => setDraft((prev) => ({ ...currentDraft, ...prev, eveningTime: e.target.value }))}
               placeholder="例如 20:00"
             />
           </div>
@@ -350,7 +366,7 @@ export default function SettingsPage() {
             <input
               className="input-shell full-width"
               value={tomorrowMorningTime}
-              onChange={(e) => setTomorrowMorningTime(e.target.value)}
+              onChange={(e) => setDraft((prev) => ({ ...currentDraft, ...prev, tomorrowMorningTime: e.target.value }))}
               placeholder="例如 09:00"
             />
           </div>
@@ -384,7 +400,7 @@ export default function SettingsPage() {
           <input
             className="input-shell full-width"
             value={aiBaseUrl}
-            onChange={(e) => setAiBaseUrl(e.target.value)}
+            onChange={(e) => setDraft((prev) => ({ ...currentDraft, ...prev, aiBaseUrl: e.target.value }))}
             placeholder="https://api.openai.com/v1 或其他兼容 API 地址"
           />
         </div>
@@ -408,7 +424,7 @@ export default function SettingsPage() {
           <input
             className="input-shell full-width"
             value={aiModel}
-            onChange={(e) => setAiModel(e.target.value)}
+            onChange={(e) => setDraft((prev) => ({ ...currentDraft, ...prev, aiModel: e.target.value }))}
             placeholder="gpt-4o、gpt-3.5-turbo 等"
           />
         </div>

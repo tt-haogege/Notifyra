@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 interface DateTimePopoverValue {
@@ -15,6 +15,14 @@ interface DateTimePopoverProps {
   maxDate?: string;
   disabledDate?: (date: string) => boolean;
   placeholder?: string;
+}
+
+interface DateTimeDraft {
+  date: string;
+  hour: string;
+  minute: string;
+  second: string;
+  viewMonth: Date;
 }
 
 const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
@@ -117,32 +125,40 @@ export function DateTimePopover({
     return '';
   };
 
-  const monthDays = useMemo(() => getMonthDays(viewMonth), [viewMonth]);
-  const canViewPrevMonth = useMemo(
-    () => Boolean(findFirstSelectableDateInMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))),
-    [viewMonth],
-  );
-  const canViewNextMonth = useMemo(
-    () => Boolean(findFirstSelectableDateInMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1))),
-    [viewMonth],
-  );
-  const canConfirm = isDateSelectable(draftDate);
+  const buildDraftFromValue = (): DateTimeDraft => {
+    const date = resolveInitialDate(value.date);
+    return {
+      date,
+      hour: value.hour || '09',
+      minute: value.minute || '00',
+      second: value.second || '00',
+      viewMonth: parseDateValue(date) ?? new Date(),
+    };
+  };
 
-  useEffect(() => {
-    if (!open) {
-      const nextDate = resolveInitialDate(value.date);
-      setDraftDate(nextDate);
-      setDraftHour(value.hour || '09');
-      setDraftMinute(value.minute || '00');
-      setDraftSecond(value.second || '00');
-      setViewMonth(parseDateValue(nextDate) ?? new Date());
-    }
-  }, [open, value.date, value.hour, value.minute, value.second, minDate, maxDate, disabledDate]);
+  const applyDraft = (draft: DateTimeDraft) => {
+    setDraftDate(draft.date);
+    setDraftHour(draft.hour);
+    setDraftMinute(draft.minute);
+    setDraftSecond(draft.second);
+    setViewMonth(draft.viewMonth);
+  };
+
+  const closePopover = (resetDraft = true) => {
+    if (resetDraft) applyDraft(buildDraftFromValue());
+    setOpen(false);
+    setPanelStyle(null);
+  };
+
+  const monthDays = getMonthDays(viewMonth);
+  const canViewPrevMonth = Boolean(findFirstSelectableDateInMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1)));
+  const canViewNextMonth = Boolean(findFirstSelectableDateInMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1)));
+  const canConfirm = isDateSelectable(draftDate);
 
   useEffect(() => {
     if (!open) return;
 
-    const updatePosition = () => {
+    const updatePanelPosition = () => {
       if (!triggerRef.current) return;
       const rect = triggerRef.current.getBoundingClientRect();
       const width = Math.min(468, window.innerWidth - 32);
@@ -158,21 +174,25 @@ export function DateTimePopover({
       const target = event.target as Node;
       if (triggerRef.current?.contains(target) || panelRef.current?.contains(target)) return;
       setOpen(false);
+      setPanelStyle(null);
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') {
+        setOpen(false);
+        setPanelStyle(null);
+      }
     };
 
-    updatePosition();
-    window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true);
+    updatePanelPosition();
+    window.addEventListener('resize', updatePanelPosition);
+    window.addEventListener('scroll', updatePanelPosition, true);
     document.addEventListener('mousedown', handleMouseDown);
     document.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      window.removeEventListener('resize', updatePosition);
-      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePanelPosition);
+      window.removeEventListener('scroll', updatePanelPosition, true);
       document.removeEventListener('mousedown', handleMouseDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
@@ -212,29 +232,18 @@ export function DateTimePopover({
   });
 
   const handleOpen = () => {
-    const nextDate = resolveInitialDate(value.date);
-    setDraftDate(nextDate);
-    setDraftHour(value.hour || '09');
-    setDraftMinute(value.minute || '00');
-    setDraftSecond(value.second || '00');
-    setViewMonth(parseDateValue(nextDate) ?? new Date());
+    applyDraft(buildDraftFromValue());
     setOpen(true);
   };
 
   const handleCancel = () => {
-    const nextDate = resolveInitialDate(value.date);
-    setDraftDate(nextDate);
-    setDraftHour(value.hour || '09');
-    setDraftMinute(value.minute || '00');
-    setDraftSecond(value.second || '00');
-    setViewMonth(parseDateValue(nextDate) ?? new Date());
-    setOpen(false);
+    closePopover();
   };
 
   const handleConfirm = () => {
     if (!canConfirm) return;
     onConfirm({ date: draftDate, hour: draftHour, minute: draftMinute, second: draftSecond });
-    setOpen(false);
+    closePopover(false);
   };
 
   const panel = open && panelStyle ? createPortal(
@@ -396,12 +405,10 @@ export function DateTimePopover({
         ref={triggerRef}
         type="button"
         className={`input-shell full-width datetime-popover-trigger ${value.date ? '' : 'placeholder'}`.trim()}
-        onClick={() => (open ? setOpen(false) : handleOpen())}
+        onClick={() => (open ? closePopover() : handleOpen())}
+        aria-expanded={open}
       >
-        <span className="datetime-popover-trigger-content">
-          <span className="datetime-popover-trigger-icon">◷</span>
-          <span className="datetime-popover-trigger-text">{triggerLabel}</span>
-        </span>
+        <span className="datetime-popover-trigger-text">{triggerLabel}</span>
         <span className="datetime-popover-trigger-arrow">▼</span>
       </button>
       {panel}

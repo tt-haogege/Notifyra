@@ -8,7 +8,7 @@ import { Select } from '../components/common/Select';
 import { channelsApi } from '../api/channels';
 import { notificationsApi } from '../api/notifications';
 import { testApi } from '../api/test';
-import { emitToast } from '../components/common/Toast';
+import { emitToast } from '../components/common/toast-events';
 import { CHANNEL_TYPE_LABELS } from '../constants/channelTypes';
 
 type TestTab = 'notification' | 'channel';

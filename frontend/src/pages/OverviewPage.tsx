@@ -7,7 +7,6 @@ import { channelsApi } from '../api/channels';
 import { recordsApi } from '../api/records';
 
 export default function OverviewPage() {
-  // 最近 7 天统计
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const startDate = sevenDaysAgo.toISOString();
@@ -42,69 +41,76 @@ export default function OverviewPage() {
 
   return (
     <div className="page-stack">
-      <PageHeader
-        title="概览"
-        description="通知状态概览、快速操作入口与最近推送记录。"
-      />
-      <div className="overview-grid">
+      <PageHeader title="概览" description="通知状态概览、快速操作入口与最近推送记录。" />
+      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <Card className="hero-metric-card">
-          <div className="eyebrow">通知总览</div>
-          <div className="hero-metric-value">{totalNotifications}</div>
-          <div className="hero-metric-subtitle">已创建通知</div>
-          <div className="metric-grid">
-            <div className="metric-box">
-              <div className="metric-label">活跃通知</div>
-              <div className="metric-value">{activeNotifications}</div>
+          <div className="mb-2 text-[13px] text-app-muted">通知总览</div>
+          <div className="text-4xl font-extrabold text-app-text sm:text-5xl">{totalNotifications}</div>
+          <div className="mt-1 text-sm text-app-muted">已创建通知</div>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-app-input-border bg-app-input p-4">
+              <div className="mb-2 text-[13px] font-bold text-app-muted">活跃通知</div>
+              <div className="text-3xl font-extrabold text-app-text">{activeNotifications}</div>
             </div>
-            <div className="metric-box">
-              <div className="metric-label">活跃渠道</div>
-              <div className="metric-value">{activeChannels}</div>
+            <div className="rounded-2xl border border-app-input-border bg-app-input p-4">
+              <div className="mb-2 text-[13px] font-bold text-app-muted">活跃渠道</div>
+              <div className="text-3xl font-extrabold text-app-text">{activeChannels}</div>
             </div>
-            <div className="metric-box">
-              <div className="metric-label">7 天成功</div>
-              <div className="metric-value success">{sevenDaySuccess}</div>
+            <div className="rounded-2xl border border-app-input-border bg-app-input p-4">
+              <div className="mb-2 text-[13px] font-bold text-app-muted">7 天成功</div>
+              <div className="text-3xl font-extrabold text-app-success">{sevenDaySuccess}</div>
             </div>
-            <div className="metric-box">
-              <div className="metric-label">7 天失败</div>
-              <div className={`metric-value ${sevenDayFailed > 0 ? 'danger' : ''}`}>{sevenDayFailed}</div>
+            <div className="rounded-2xl border border-app-input-border bg-app-input p-4">
+              <div className="mb-2 text-[13px] font-bold text-app-muted">7 天失败</div>
+              <div className={`text-3xl font-extrabold ${sevenDayFailed > 0 ? 'text-[#fca5a5]' : 'text-app-text'}`}>
+                {sevenDayFailed}
+              </div>
             </div>
           </div>
         </Card>
-        <Card>
+        <Card className="stack-gap">
           <h3>快捷操作</h3>
-          <div className="shortcut-grid">
+          <div className="grid gap-3 sm:grid-cols-2">
             {shortcuts.map((s) => (
-              <Link className={`shortcut-card ${s.tone}`} key={s.to} to={s.to}>
+              <Link
+                className={`shortcut-card ${s.tone} no-underline transition hover:-translate-y-0.5`}
+                key={s.to}
+                to={s.to}
+              >
                 <div className="shortcut-icon" />
-                <div>
-                  <div className="row-title">{s.title}</div>
-                  <div className="row-subtitle">{s.description}</div>
+                <div className="grid gap-1">
+                  <div className="font-bold text-app-text">{s.title}</div>
+                  <div className="text-sm text-app-muted">{s.description}</div>
                 </div>
               </Link>
             ))}
           </div>
         </Card>
       </div>
-      <Card>
-        <div className="section-header">
+      <Card className="stack-gap">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h3>最近推送记录</h3>
-          <Link className="text-link" to="/push-records">
+          <Link className="text-sm font-medium text-app-primary no-underline" to="/push-records">
             查看全部
           </Link>
         </div>
-        <div className="recent-list">
+        <div className="grid gap-2">
           {records?.items.slice(0, 5).map((r) => (
-            <Link className="recent-row" key={r.id} to={`/push-records/${r.id}`}>
-              <span>{new Date(r.pushedAt).toLocaleString('zh-CN')}</span>
-              <strong>{r.notificationName}</strong>
-              <span>{r.channelName}</span>
+            <Link
+              className="flex flex-col gap-3 rounded-2xl bg-[var(--muted-card)] px-4 py-4 text-app-text no-underline transition hover:-translate-y-0.5 sm:flex-row sm:items-center sm:justify-between"
+              key={r.id}
+              to={`/push-records/${r.id}`}
+            >
+              <span className="text-sm text-app-muted">{new Date(r.pushedAt).toLocaleString('zh-CN')}</span>
+              <strong className="font-semibold">{r.notificationName}</strong>
+              <span className="text-sm text-app-muted">{r.channelName}</span>
               <span className={`status-badge ${r.status === 'success' ? 'green' : r.status === 'failed' ? 'red' : 'blue'}`}>
                 {r.status === 'success' ? '成功' : r.status === 'failed' ? '失败' : '处理中'}
               </span>
             </Link>
           ))}
           {(!records?.items || records.items.length === 0) && (
-            <div className="muted-text" style={{ padding: 16 }}>暂无推送记录</div>
+            <div className="rounded-2xl bg-[var(--muted-card)] px-4 py-4 text-sm text-app-muted">暂无推送记录</div>
           )}
         </div>
       </Card>

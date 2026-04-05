@@ -7,7 +7,7 @@ import { StatusBadge } from '../components/common/StatusBadge';
 import { FakeSwitch } from '../components/common/FakeSwitch';
 import { Select } from '../components/common/Select';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
-import { emitToast } from '../components/common/Toast';
+import { emitToast } from '../components/common/toast-events';
 import { notificationsApi } from '../api/notifications';
 import type { Notification as NotificationType } from '../api/notifications';
 import { CHANNEL_TYPE_LABELS } from '../constants/channelTypes';

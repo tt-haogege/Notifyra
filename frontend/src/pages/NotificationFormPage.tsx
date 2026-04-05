@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card } from '../components/common/Card';
+import { Select } from '../components/common/Select';
 import { PageHeader } from '../components/layout/PageHeader';
 import { TriggerTypeSelector } from '../components/common/TriggerTypeSelector';
 import { DateTimePopover } from '../components/common/DateTimePopover';
 import { notificationsApi } from '../api/notifications';
 import { channelsApi } from '../api/channels';
-import { emitToast } from '../components/common/Toast';
+import { emitToast } from '../components/common/toast-events';
 import type { Notification } from '../api/notifications';
 
 const padNumber = (value: number) => value.toString().padStart(2, '0');
@@ -45,22 +46,46 @@ const buildScheduleAt = (date: string, hour: string, minute: string, second: str
   return `${date}T${hour}:${minute}:${second}`;
 };
 
+const getDefaultNotificationDraft = (todayValue: string, sourceKey: string) => ({
+  sourceKey,
+  name: '',
+  triggerType: 'once' as Notification['triggerType'],
+  title: '',
+  content: '',
+  selectedChannels: [] as string[],
+  selectedDate: todayValue,
+  selectedHour: '09',
+  selectedMinute: '00',
+  selectedSecond: '00',
+  cronExpression: '',
+});
+
+const getNotificationDraftFromExisting = (existing: Notification, todayValue: string) => {
+  const scheduleValue = existing.triggerConfig.executeAt ?? existing.triggerConfig.scheduleAt ?? '';
+  const parsedSchedule = parseScheduleParts(scheduleValue);
+
+  return {
+    sourceKey: existing.id,
+    name: existing.name,
+    triggerType: existing.triggerType,
+    title: existing.title,
+    content: existing.content,
+    selectedChannels: existing.channels?.map((channel) => channel.id) ?? (existing.channelIds ?? []),
+    selectedDate: parsedSchedule.date || todayValue,
+    selectedHour: parsedSchedule.hour || '09',
+    selectedMinute: parsedSchedule.minute || '00',
+    selectedSecond: parsedSchedule.second || '00',
+    cronExpression: existing.triggerConfig.cron ?? '',
+  };
+};
+
 export default function NotificationFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isEdit = !!id;
   const todayValue = formatDateValue(new Date());
 
-  const [name, setName] = useState('');
-  const [triggerType, setTriggerType] = useState<Notification['triggerType']>('once');
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
-  const [selectedDate, setSelectedDate] = useState('');
-  const [selectedHour, setSelectedHour] = useState('09');
-  const [selectedMinute, setSelectedMinute] = useState('00');
-  const [selectedSecond, setSelectedSecond] = useState('00');
-  const [cronExpression, setCronExpression] = useState('');
+  const [draft, setDraft] = useState(() => getDefaultNotificationDraft(todayValue, 'new'));
 
   const { data: channels } = useQuery({
     queryKey: ['channels', { pageSize: 100 }],
@@ -73,40 +98,25 @@ export default function NotificationFormPage() {
     enabled: isEdit,
   });
 
-  useEffect(() => {
-    if (!isEdit) {
-      setName('');
-      setTriggerType('once');
-      setTitle('');
-      setContent('');
-      setSelectedChannels([]);
-      setSelectedDate(todayValue);
-      setSelectedHour('09');
-      setSelectedMinute('00');
-      setSelectedSecond('00');
-      setCronExpression('');
-      return;
-    }
-
-    if (existing) {
-      setName(existing.name);
-      setTriggerType(existing.triggerType);
-      setTitle(existing.title);
-      setContent(existing.content);
-      setSelectedChannels(existing.channels?.map((c) => c.id) ?? (existing.channelIds ?? []));
-
-      const scheduleValue = existing.triggerConfig.executeAt ?? existing.triggerConfig.scheduleAt ?? '';
-      const parsedSchedule = parseScheduleParts(scheduleValue);
-      const nextDate = parsedSchedule.date || todayValue;
-      setSelectedDate(nextDate);
-      setSelectedHour(parsedSchedule.hour || '09');
-      setSelectedMinute(parsedSchedule.minute || '00');
-      setSelectedSecond(parsedSchedule.second || '00');
-      setCronExpression(existing.triggerConfig.cron ?? '');
-    }
-  }, [existing, isEdit, todayValue]);
+  const hydratedDraft = isEdit && existing
+    ? getNotificationDraftFromExisting(existing, todayValue)
+    : getDefaultNotificationDraft(todayValue, 'new');
+  const currentDraft = draft.sourceKey === hydratedDraft.sourceKey ? draft : hydratedDraft;
+  const {
+    name,
+    triggerType,
+    title,
+    content,
+    selectedChannels,
+    selectedDate,
+    selectedHour,
+    selectedMinute,
+    selectedSecond,
+    cronExpression,
+  } = currentDraft;
 
   const activeChannels = channels?.items.filter((c) => c.status === 'active') ?? [];
+  const channelOptions = activeChannels.map((channel) => ({ value: channel.id, label: channel.name }));
 
   const createMutation = useMutation({
     mutationFn: (data: Parameters<typeof notificationsApi.create>[0]) => notificationsApi.create(data),
@@ -123,12 +133,6 @@ export default function NotificationFormPage() {
       navigate(`/notifications/${id}`);
     },
   });
-
-  const toggleChannel = (chId: string) => {
-    setSelectedChannels((prev) =>
-      prev.includes(chId) ? prev.filter((c) => c !== chId) : [...prev, chId]
-    );
-  };
 
   const handleSubmit = () => {
     if (selectedChannels.length === 0) {
@@ -168,64 +172,66 @@ export default function NotificationFormPage() {
         </div>
         <div>
           <div className="field-label">触发类型</div>
-          <TriggerTypeSelector value={triggerType} onChange={setTriggerType} />
+          <TriggerTypeSelector
+            value={triggerType}
+            onChange={(value) => setDraft((prev) => ({ ...currentDraft, ...prev, triggerType: value }))}
+          />
           <p className="helper-text">不同触发类型会显示不同的触发时间配置方式；单次通知支持精确到秒。</p>
         </div>
         <div className="form-grid two-columns">
           <div>
             <div className="field-label">通知名称</div>
-            <input className="input-shell full-width" value={name} onChange={(e) => setName(e.target.value)} placeholder="请输入通知名称" />
+            <input className="input-shell full-width" value={name} onChange={(e) => setDraft((prev) => ({ ...currentDraft, ...prev, name: e.target.value }))} placeholder="请输入通知名称" />
           </div>
           <div>
             <div className="field-label">发送渠道</div>
-            <div className="input-shell">
-              {activeChannels.length > 0 ? (
-                <div className="tag-list">
-                  {activeChannels.map((ch) => (
-                    <button
-                      key={ch.id}
-                      className={`tag ${selectedChannels.includes(ch.id) ? 'active' : ''}`}
-                      style={{ cursor: 'pointer', background: selectedChannels.includes(ch.id) ? 'var(--primary)' : undefined, color: selectedChannels.includes(ch.id) ? 'white' : undefined }}
-                      onClick={() => toggleChannel(ch.id)}
-                      type="button"
-                    >
-                      {ch.name}
-                    </button>
-                  ))}
-                </div>
-              ) : '暂无可用渠道'}
-            </div>
+            {activeChannels.length > 0 ? (
+              <Select
+                className="input-shell full-width"
+                multiple
+                values={selectedChannels}
+                onValuesChange={(values) => setDraft((prev) => ({ ...currentDraft, ...prev, selectedChannels: values }))}
+                options={channelOptions}
+                placeholder="请选择发送渠道"
+              />
+            ) : (
+              <div className="input-shell full-width">暂无可用渠道</div>
+            )}
             <p className="helper-text">请主动选择至少一个启用中的发送渠道。</p>
           </div>
           <div>
             <div className="field-label">标题</div>
-            <input className="input-shell full-width" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="请输入通知标题" />
+            <input className="input-shell full-width" value={title} onChange={(e) => setDraft((prev) => ({ ...currentDraft, ...prev, title: e.target.value }))} placeholder="请输入通知标题" />
           </div>
           {triggerType !== 'webhook' && (
             <div>
               <div className="field-label">触发时间</div>
-              <div className="input-shell highlight stack-gap">
-                {triggerType === 'once' ? (
-                  <DateTimePopover
-                    value={{ date: selectedDate, hour: selectedHour, minute: selectedMinute, second: selectedSecond }}
-                    minDate={todayValue}
-                    onConfirm={({ date, hour, minute, second }) => {
-                      setSelectedDate(date);
-                      setSelectedHour(hour);
-                      setSelectedMinute(minute);
-                      setSelectedSecond(second);
-                    }}
-                  />
-                ) : (
-                  <input className="full-width" value={cronExpression} onChange={(e) => setCronExpression(e.target.value)} placeholder="0 * * * *" style={{ background: 'transparent', border: 'none', outline: 'none', color: 'inherit' }} />
-                )}
-              </div>
+              {triggerType === 'once' ? (
+                <DateTimePopover
+                  value={{ date: selectedDate, hour: selectedHour, minute: selectedMinute, second: selectedSecond }}
+                  minDate={todayValue}
+                  onConfirm={({ date, hour, minute, second }) => {
+                    setDraft((prev) => ({
+                      ...currentDraft,
+                      ...prev,
+                      selectedDate: date,
+                      selectedHour: hour,
+                      selectedMinute: minute,
+                      selectedSecond: second,
+                    }));
+                  }}
+                />
+              ) : (
+                <div className="input-shell highlight stack-gap">
+                  <input className="full-width" value={cronExpression} onChange={(e) => setDraft((prev) => ({ ...currentDraft, ...prev, cronExpression: e.target.value }))} placeholder="0 * * * *" style={{ background: 'transparent', border: 'none', outline: 'none', color: 'inherit' }} />
+                </div>
+              )}
             </div>
           )}
         </div>
         <div>
           <div className="field-label">正文</div>
-          <textarea className="textarea-shell full-width" value={content} onChange={(e) => setContent(e.target.value)} placeholder="请输入通知正文..." />
+          <textarea className="textarea-shell full-width" value={content} onChange={(e) => setDraft((prev) => ({ ...currentDraft, ...prev, content: e.target.value }))} placeholder="请输入通知正文..." />
         </div>
         <div className="preview-box">
           <strong>触发类型说明</strong>
