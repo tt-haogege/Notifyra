@@ -21,16 +21,21 @@ export default function OverviewPage() {
     queryFn: () => channelsApi.list({ pageSize: 100 }),
   });
 
-  const { data: records } = useQuery({
-    queryKey: ['records', { pageSize: 100, startDate }],
+  const { data: recentRecords } = useQuery({
+    queryKey: ['recentRecords', { pageSize: 5 }],
+    queryFn: () => recordsApi.list({ pageSize: 5 }),
+  });
+
+  const { data: weeklyRecords } = useQuery({
+    queryKey: ['weeklyRecords', { pageSize: 100, startDate }],
     queryFn: () => recordsApi.list({ pageSize: 100, startDate }),
   });
 
   const activeNotifications = notifications?.items.filter((n) => n.status === 'active').length ?? 0;
   const totalNotifications = notifications?.total ?? 0;
   const activeChannels = channels?.items.filter((c) => c.status === 'active').length ?? 0;
-  const sevenDaySuccess = records?.items.filter((r) => r.status === 'success').length ?? 0;
-  const sevenDayFailed = records?.items.filter((r) => r.status === 'failed').length ?? 0;
+  const sevenDaySuccess = weeklyRecords?.items.filter((r) => r.status === 'success').length ?? 0;
+  const sevenDayFailed = weeklyRecords?.items.filter((r) => r.status === 'failed').length ?? 0;
 
   const shortcuts = [
     { title: '添加渠道', description: '绑定第一个通知渠道', to: '/channels/new', tone: 'indigo' },
@@ -95,7 +100,7 @@ export default function OverviewPage() {
           </Link>
         </div>
         <div className="grid gap-2">
-          {records?.items.slice(0, 5).map((r) => (
+          {recentRecords?.items.map((r) => (
             <Link
               className="flex flex-col gap-3 rounded-2xl bg-[var(--muted-card)] px-4 py-4 text-app-text no-underline transition hover:-translate-y-0.5 sm:flex-row sm:items-center sm:justify-between"
               key={r.id}
@@ -109,7 +114,7 @@ export default function OverviewPage() {
               </span>
             </Link>
           ))}
-          {(!records?.items || records.items.length === 0) && (
+          {(!recentRecords?.items || recentRecords.items.length === 0) && (
             <div className="rounded-2xl bg-[var(--muted-card)] px-4 py-4 text-sm text-app-muted">暂无推送记录</div>
           )}
         </div>

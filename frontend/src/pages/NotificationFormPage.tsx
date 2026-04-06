@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card } from '../components/common/Card';
@@ -98,10 +98,12 @@ export default function NotificationFormPage() {
     enabled: isEdit,
   });
 
-  const hydratedDraft = isEdit && existing
-    ? getNotificationDraftFromExisting(existing, todayValue)
-    : getDefaultNotificationDraft(todayValue, 'new');
-  const currentDraft = draft.sourceKey === hydratedDraft.sourceKey ? draft : hydratedDraft;
+  useEffect(() => {
+    if (!isEdit || !existing || draft.sourceKey === existing.id) return;
+    setDraft(getNotificationDraftFromExisting(existing, todayValue));
+  }, [draft.sourceKey, existing, isEdit, todayValue]);
+
+  const currentDraft = draft;
   const {
     name,
     triggerType,
@@ -174,14 +176,14 @@ export default function NotificationFormPage() {
           <div className="field-label">触发类型</div>
           <TriggerTypeSelector
             value={triggerType}
-            onChange={(value) => setDraft((prev) => ({ ...currentDraft, ...prev, triggerType: value }))}
+            onChange={(value) => setDraft((prev) => ({ ...prev, triggerType: value }))}
           />
           <p className="helper-text">不同触发类型会显示不同的触发时间配置方式；单次通知支持精确到秒。</p>
         </div>
         <div className="form-grid two-columns">
           <div>
             <div className="field-label">通知名称</div>
-            <input className="input-shell full-width" value={name} onChange={(e) => setDraft((prev) => ({ ...currentDraft, ...prev, name: e.target.value }))} placeholder="请输入通知名称" />
+            <input className="input-shell full-width" value={name} onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))} placeholder="请输入通知名称" />
           </div>
           <div>
             <div className="field-label">发送渠道</div>
@@ -190,7 +192,7 @@ export default function NotificationFormPage() {
                 className="input-shell full-width"
                 multiple
                 values={selectedChannels}
-                onValuesChange={(values) => setDraft((prev) => ({ ...currentDraft, ...prev, selectedChannels: values }))}
+                onValuesChange={(values) => setDraft((prev) => ({ ...prev, selectedChannels: values }))}
                 options={channelOptions}
                 placeholder="请选择发送渠道"
               />
@@ -201,7 +203,7 @@ export default function NotificationFormPage() {
           </div>
           <div>
             <div className="field-label">标题</div>
-            <input className="input-shell full-width" value={title} onChange={(e) => setDraft((prev) => ({ ...currentDraft, ...prev, title: e.target.value }))} placeholder="请输入通知标题" />
+            <input className="input-shell full-width" value={title} onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))} placeholder="请输入通知标题" />
           </div>
           {triggerType !== 'webhook' && (
             <div>
@@ -212,7 +214,6 @@ export default function NotificationFormPage() {
                   minDate={todayValue}
                   onConfirm={({ date, hour, minute, second }) => {
                     setDraft((prev) => ({
-                      ...currentDraft,
                       ...prev,
                       selectedDate: date,
                       selectedHour: hour,
@@ -223,7 +224,7 @@ export default function NotificationFormPage() {
                 />
               ) : (
                 <div className="input-shell highlight stack-gap">
-                  <input className="full-width" value={cronExpression} onChange={(e) => setDraft((prev) => ({ ...currentDraft, ...prev, cronExpression: e.target.value }))} placeholder="0 * * * *" style={{ background: 'transparent', border: 'none', outline: 'none', color: 'inherit' }} />
+                  <input className="full-width" value={cronExpression} onChange={(e) => setDraft((prev) => ({ ...prev, cronExpression: e.target.value }))} placeholder="0 * * * *" style={{ background: 'transparent', border: 'none', outline: 'none', color: 'inherit' }} />
                 </div>
               )}
             </div>
@@ -231,7 +232,7 @@ export default function NotificationFormPage() {
         </div>
         <div>
           <div className="field-label">正文</div>
-          <textarea className="textarea-shell full-width" value={content} onChange={(e) => setDraft((prev) => ({ ...currentDraft, ...prev, content: e.target.value }))} placeholder="请输入通知正文..." />
+          <textarea className="textarea-shell full-width" value={content} onChange={(e) => setDraft((prev) => ({ ...prev, content: e.target.value }))} placeholder="请输入通知正文..." />
         </div>
         <div className="preview-box">
           <strong>触发类型说明</strong>

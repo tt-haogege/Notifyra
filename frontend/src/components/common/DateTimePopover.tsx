@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { MutableRefObject } from 'react';
 import { createPortal } from 'react-dom';
 
 interface DateTimePopoverValue {
@@ -80,6 +81,9 @@ export function DateTimePopover({
   const hourListRef = useRef<HTMLDivElement>(null);
   const minuteListRef = useRef<HTMLDivElement>(null);
   const secondListRef = useRef<HTMLDivElement>(null);
+  const hourScrollTimeoutRef = useRef<number | null>(null);
+  const minuteScrollTimeoutRef = useRef<number | null>(null);
+  const secondScrollTimeoutRef = useRef<number | null>(null);
   const [open, setOpen] = useState(false);
   const [draftDate, setDraftDate] = useState(value.date);
   const [draftHour, setDraftHour] = useState(value.hour || '09');
@@ -150,10 +154,66 @@ export function DateTimePopover({
     setPanelStyle(null);
   };
 
+  const scrollTimeListToActive = (
+    list: HTMLDivElement | null,
+    itemSelector: string,
+    activeValue: string,
+  ) => {
+    if (!list) return;
+
+    const items = Array.from(list.querySelectorAll<HTMLElement>(itemSelector));
+    const activeItem = items.find((item) => item.textContent?.trim() === activeValue);
+    if (!activeItem) return;
+
+    const targetScrollTop = activeItem.offsetTop - (list.clientHeight - activeItem.offsetHeight) / 2;
+    list.scrollTop = Math.max(targetScrollTop, 0);
+  };
+
+  const getCenteredTimeValue = (list: HTMLDivElement | null) => {
+    if (!list) return '';
+
+    const items = Array.from(list.querySelectorAll<HTMLElement>('.datetime-popover-time-item'));
+    if (items.length === 0) return '';
+
+    const listCenter = list.scrollTop + list.clientHeight / 2;
+
+    const closestItem = items.reduce((closest, item) => {
+      const itemCenter = item.offsetTop + item.offsetHeight / 2;
+      const distance = Math.abs(itemCenter - listCenter);
+
+      if (!closest || distance < closest.distance) {
+        return { item, distance };
+      }
+
+      return closest;
+    }, null as { item: HTMLElement; distance: number } | null);
+
+    return closestItem?.item.textContent?.trim() ?? '';
+  };
+
+  const syncTimeValueFromScroll = (
+    list: HTMLDivElement | null,
+    timeoutRef: MutableRefObject<number | null>,
+    setValue: (value: string) => void,
+  ) => {
+    if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
+
+    timeoutRef.current = window.setTimeout(() => {
+      const nextValue = getCenteredTimeValue(list);
+      if (nextValue) setValue(nextValue);
+      timeoutRef.current = null;
+    }, 120);
+  };
+
   const monthDays = getMonthDays(viewMonth);
   const canViewPrevMonth = Boolean(findFirstSelectableDateInMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1)));
   const canViewNextMonth = Boolean(findFirstSelectableDateInMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1)));
   const canConfirm = isDateSelectable(draftDate);
+
+  useEffect(() => {
+    if (open) return;
+    applyDraft(buildDraftFromValue());
+  }, [open, value.date, value.hour, value.minute, value.second, minDate, maxDate, disabledDate]);
 
   useEffect(() => {
     if (!open) return;
@@ -163,10 +223,23 @@ export function DateTimePopover({
       const rect = triggerRef.current.getBoundingClientRect();
       const width = Math.min(468, window.innerWidth - 32);
       const maxLeft = Math.max(16, window.innerWidth - width - 16);
-      setPanelStyle({
+      const nextStyle = {
         top: rect.bottom + 8,
         left: Math.min(rect.left, maxLeft),
         width,
+      };
+
+      setPanelStyle((current) => {
+        if (
+          current
+          && current.top === nextStyle.top
+          && current.left === nextStyle.left
+          && current.width === nextStyle.width
+        ) {
+          return current;
+        }
+
+        return nextStyle;
       });
     };
 
@@ -199,16 +272,24 @@ export function DateTimePopover({
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !panelStyle) return;
 
-    const activeHour = hourListRef.current?.querySelector<HTMLElement>('[data-active="true"]');
-    const activeMinute = minuteListRef.current?.querySelector<HTMLElement>('[data-active="true"]');
-    const activeSecond = secondListRef.current?.querySelector<HTMLElement>('[data-active="true"]');
+    const frameId = window.requestAnimationFrame(() => {
+      scrollTimeListToActive(hourListRef.current, '.datetime-popover-time-item', draftHour);
+      scrollTimeListToActive(minuteListRef.current, '.datetime-popover-time-item', draftMinute);
+      scrollTimeListToActive(secondListRef.current, '.datetime-popover-time-item', draftSecond);
+    });
 
-    activeHour?.scrollIntoView({ block: 'center' });
-    activeMinute?.scrollIntoView({ block: 'center' });
-    activeSecond?.scrollIntoView({ block: 'center' });
-  }, [open, draftHour, draftMinute, draftSecond]);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [open, panelStyle, draftHour, draftMinute, draftSecond]);
+
+  useEffect(() => {
+    return () => {
+      if (hourScrollTimeoutRef.current) window.clearTimeout(hourScrollTimeoutRef.current);
+      if (minuteScrollTimeoutRef.current) window.clearTimeout(minuteScrollTimeoutRef.current);
+      if (secondScrollTimeoutRef.current) window.clearTimeout(secondScrollTimeoutRef.current);
+    };
+  }, []);
 
   const triggerLabel = value.date ? `${formatDateLabel(value.date)} ${value.hour}:${value.minute}:${value.second}` : placeholder;
   const summaryDateLabel = draftDate ? formatDateLabel(draftDate) : '请选择日期';
@@ -336,7 +417,11 @@ export function DateTimePopover({
           <span className="datetime-popover-time-title">时间（时:分:秒）</span>
           <div className="datetime-popover-time-picker">
             <div className="datetime-popover-time-highlight" />
-            <div ref={hourListRef} className="datetime-popover-time-list">
+            <div
+              ref={hourListRef}
+              className="datetime-popover-time-list"
+              onScroll={() => syncTimeValueFromScroll(hourListRef.current, hourScrollTimeoutRef, setDraftHour)}
+            >
               <div className="datetime-popover-time-spacer" />
               {HOURS.map((hour) => (
                 <button
@@ -352,7 +437,11 @@ export function DateTimePopover({
               <div className="datetime-popover-time-spacer" />
             </div>
             <div className="datetime-popover-time-divider">:</div>
-            <div ref={minuteListRef} className="datetime-popover-time-list">
+            <div
+              ref={minuteListRef}
+              className="datetime-popover-time-list"
+              onScroll={() => syncTimeValueFromScroll(minuteListRef.current, minuteScrollTimeoutRef, setDraftMinute)}
+            >
               <div className="datetime-popover-time-spacer" />
               {MINUTES.map((minute) => (
                 <button
@@ -368,7 +457,11 @@ export function DateTimePopover({
               <div className="datetime-popover-time-spacer" />
             </div>
             <div className="datetime-popover-time-divider">:</div>
-            <div ref={secondListRef} className="datetime-popover-time-list">
+            <div
+              ref={secondListRef}
+              className="datetime-popover-time-list"
+              onScroll={() => syncTimeValueFromScroll(secondListRef.current, secondScrollTimeoutRef, setDraftSecond)}
+            >
               <div className="datetime-popover-time-spacer" />
               {SECONDS.map((second) => (
                 <button
