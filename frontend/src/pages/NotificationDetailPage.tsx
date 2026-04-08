@@ -185,8 +185,8 @@ export default function NotificationDetailPage() {
                   <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                     {r.title}
                   </span>
-                  <StatusBadge tone={r.result === 'success' ? 'green' : r.result === 'failed' ? 'red' : 'blue'}>
-                    {r.result === 'success' ? '成功' : r.result === 'failed' ? '失败' : '处理中'}
+                  <StatusBadge tone={r.result === 'success' ? 'green' : r.result === 'failure' ? 'red' : 'orange'}>
+                    {r.result === 'success' ? '成功' : r.result === 'failure' ? '失败' : '部分成功'}
                   </StatusBadge>
                 </Link>
               ))}

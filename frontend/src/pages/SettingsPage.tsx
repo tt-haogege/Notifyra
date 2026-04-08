@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/common/Card';
+import { FakeSwitch } from '../components/common/FakeSwitch';
 import { PageHeader } from '../components/layout/PageHeader';
 import { useToast } from '../components/common/toast-context';
 import { authApi } from '../api/auth';
@@ -50,12 +51,14 @@ const getSettingsDraft = (settings?: {
   afternoonTime?: string | null;
   eveningTime?: string | null;
   tomorrowMorningTime?: string | null;
+  allowHighFrequencyScheduling?: boolean | null;
 }) => ({
   aiBaseUrl: settings?.aiBaseUrl || '',
   aiModel: settings?.aiModel || '',
   afternoonTime: settings?.afternoonTime || '',
   eveningTime: settings?.eveningTime || '',
   tomorrowMorningTime: settings?.tomorrowMorningTime || '',
+  allowHighFrequencyScheduling: settings?.allowHighFrequencyScheduling ?? false,
 });
 
 export default function SettingsPage() {
@@ -87,15 +90,26 @@ export default function SettingsPage() {
         settings.afternoonTime ?? '',
         settings.eveningTime ?? '',
         settings.tomorrowMorningTime ?? '',
+        settings.allowHighFrequencyScheduling ?? false,
       ])
     : 'loading';
   const hydratedDraft = { sourceKey: settingsSourceKey, ...getSettingsDraft(settings) };
   const currentDraft = draft.sourceKey === settingsSourceKey ? draft : hydratedDraft;
+  const updateDraft = (
+    updater: (current: typeof currentDraft) => Omit<typeof currentDraft, 'sourceKey'>,
+  ) => {
+    setDraft({
+      sourceKey: settingsSourceKey,
+      ...updater(currentDraft),
+    });
+  };
   const aiBaseUrl = currentDraft.aiBaseUrl;
   const aiModel = currentDraft.aiModel;
   const afternoonTime = currentDraft.afternoonTime;
   const eveningTime = currentDraft.eveningTime;
   const tomorrowMorningTime = currentDraft.tomorrowMorningTime;
+  const allowHighFrequencyScheduling =
+    currentDraft.allowHighFrequencyScheduling;
 
   // Password
   const [oldPassword, setOldPassword] = useState('');
@@ -194,11 +208,12 @@ export default function SettingsPage() {
   const handleSettingsSubmit = () => {
     updateSettingsMutation.mutate({
       aiBaseUrl: aiBaseUrl || null,
-      aiApiKey: aiApiKey || null,
+      aiApiKey: aiApiKey || undefined,
       aiModel: aiModel || null,
       afternoonTime: afternoonTime || null,
       eveningTime: eveningTime || null,
       tomorrowMorningTime: tomorrowMorningTime || null,
+      allowHighFrequencyScheduling,
     });
   };
 
@@ -348,7 +363,12 @@ export default function SettingsPage() {
             <input
               className="input-shell full-width"
               value={afternoonTime}
-              onChange={(e) => setDraft((prev) => ({ ...currentDraft, ...prev, afternoonTime: e.target.value }))}
+              onChange={(e) =>
+                updateDraft((current) => ({
+                  ...current,
+                  afternoonTime: e.target.value,
+                }))
+              }
               placeholder="例如 14:00"
             />
           </div>
@@ -357,7 +377,12 @@ export default function SettingsPage() {
             <input
               className="input-shell full-width"
               value={eveningTime}
-              onChange={(e) => setDraft((prev) => ({ ...currentDraft, ...prev, eveningTime: e.target.value }))}
+              onChange={(e) =>
+                updateDraft((current) => ({
+                  ...current,
+                  eveningTime: e.target.value,
+                }))
+              }
               placeholder="例如 20:00"
             />
           </div>
@@ -366,8 +391,37 @@ export default function SettingsPage() {
             <input
               className="input-shell full-width"
               value={tomorrowMorningTime}
-              onChange={(e) => setDraft((prev) => ({ ...currentDraft, ...prev, tomorrowMorningTime: e.target.value }))}
+              onChange={(e) =>
+                updateDraft((current) => ({
+                  ...current,
+                  tomorrowMorningTime: e.target.value,
+                }))
+              }
               placeholder="例如 09:00"
+            />
+          </div>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            padding: '12px 0',
+            borderTop: '1px solid var(--border)'
+          }}>
+            <div>
+              <div className="field-label" style={{ marginBottom: 4 }}>允许高频调度</div>
+              <div className="helper-text" style={{ marginTop: 0 }}>
+                开启后，允许 recurring cron 低于每 5 分钟一次执行；关闭后，最小执行间隔为 5 分钟。
+              </div>
+            </div>
+            <FakeSwitch
+              checked={allowHighFrequencyScheduling}
+              onChange={(checked) =>
+                updateDraft((current) => ({
+                  ...current,
+                  allowHighFrequencyScheduling: checked,
+                }))
+              }
             />
           </div>
           <div>
@@ -379,6 +433,7 @@ export default function SettingsPage() {
                   afternoonTime: afternoonTime || null,
                   eveningTime: eveningTime || null,
                   tomorrowMorningTime: tomorrowMorningTime || null,
+                  allowHighFrequencyScheduling,
                 })
               }
               disabled={updateTimePrefsMutation.isPending}
@@ -400,7 +455,12 @@ export default function SettingsPage() {
           <input
             className="input-shell full-width"
             value={aiBaseUrl}
-            onChange={(e) => setDraft((prev) => ({ ...currentDraft, ...prev, aiBaseUrl: e.target.value }))}
+            onChange={(e) =>
+              updateDraft((current) => ({
+                ...current,
+                aiBaseUrl: e.target.value,
+              }))
+            }
             placeholder="https://api.openai.com/v1 或其他兼容 API 地址"
           />
         </div>
@@ -424,7 +484,12 @@ export default function SettingsPage() {
           <input
             className="input-shell full-width"
             value={aiModel}
-            onChange={(e) => setDraft((prev) => ({ ...currentDraft, ...prev, aiModel: e.target.value }))}
+            onChange={(e) =>
+              updateDraft((current) => ({
+                ...current,
+                aiModel: e.target.value,
+              }))
+            }
             placeholder="gpt-4o、gpt-3.5-turbo 等"
           />
         </div>

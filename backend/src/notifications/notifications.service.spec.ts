@@ -19,6 +19,9 @@ describe('NotificationsService', () => {
     channel: {
       findMany: jest.fn(),
     },
+    userSettings: {
+      findUnique: jest.fn(),
+    },
     notificationChannel: {
       createMany: jest.fn(),
       deleteMany: jest.fn(),
@@ -27,8 +30,9 @@ describe('NotificationsService', () => {
     pushRecord: {
       findMany: jest.fn(),
     },
-    $transaction: jest.fn(async (callback: (tx: typeof mockPrisma) => unknown) =>
-      callback(mockPrisma),
+    $transaction: jest.fn(
+      async (callback: (tx: typeof mockPrisma) => unknown) =>
+        callback(mockPrisma),
     ),
   };
 
@@ -45,6 +49,7 @@ describe('NotificationsService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPrisma.userSettings.findUnique.mockResolvedValue(null);
   });
 
   describe('create', () => {
@@ -137,7 +142,127 @@ describe('NotificationsService', () => {
       ).rejects.toThrow(new BadRequestException('Cron 表达式不合法'));
     });
 
-    it('creates webhook notification with bindings and null nextTriggerAt', async () => {
+    it('allows high-frequency recurring trigger config when setting allows high-frequency scheduling', async () => {
+      mockPrisma.channel.findMany.mockResolvedValue([
+        {
+          id: 'channel-1',
+          userId: 'user-1',
+          status: 'active',
+        },
+      ]);
+      mockPrisma.userSettings.findUnique.mockResolvedValue({
+        allowHighFrequencyScheduling: true,
+      });
+      mockPrisma.notification.create.mockResolvedValue({
+        id: 'notification-high-frequency',
+        name: '高频提醒',
+        triggerType: 'recurring',
+        title: '高频标题',
+        content: '高频内容',
+        triggerJson: '{"cron":"*/10 * * * * *"}',
+        status: 'active',
+        nextTriggerAt: new Date('2026-03-29T09:00:10.000Z'),
+        stopReason: null,
+        createdBy: 'manual',
+        note: null,
+        createdAt: new Date('2026-03-28T00:00:00.000Z'),
+        updatedAt: new Date('2026-03-28T00:00:00.000Z'),
+      });
+
+      const result = await service.create('user-1', {
+        name: '高频提醒',
+        title: '高频标题',
+        content: '高频内容',
+        triggerType: 'recurring',
+        triggerConfig: { cron: '*/10 * * * * *' },
+        channelIds: ['channel-1'],
+      });
+
+      expect(result.triggerConfig).toEqual({ cron: '*/10 * * * * *' });
+      expect(mockPrisma.notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            triggerJson: '{"cron":"*/10 * * * * *"}',
+            nextTriggerAt: expect.any(Date),
+          }),
+        }),
+      );
+    });
+
+    it('rejects high-frequency recurring trigger config when setting disallows high-frequency scheduling', async () => {
+      mockPrisma.channel.findMany.mockResolvedValue([
+        {
+          id: 'channel-1',
+          userId: 'user-1',
+          status: 'active',
+        },
+      ]);
+      mockPrisma.userSettings.findUnique.mockResolvedValue({
+        allowHighFrequencyScheduling: false,
+      });
+
+      await expect(
+        service.create('user-1', {
+          name: '高频提醒',
+          title: '高频标题',
+          content: '高频内容',
+          triggerType: 'recurring',
+          triggerConfig: { cron: '*/10 * * * * *' },
+          channelIds: ['channel-1'],
+        }),
+      ).rejects.toThrow(
+        new BadRequestException('Cron 执行频率不能高于每 5 分钟一次'),
+      );
+    });
+
+    it('accepts 6-part recurring cron expression', async () => {
+      mockPrisma.channel.findMany.mockResolvedValue([
+        {
+          id: 'channel-1',
+          userId: 'user-1',
+          status: 'active',
+        },
+      ]);
+      mockPrisma.notification.create.mockResolvedValue({
+        id: 'notification-6-part',
+        name: '秒级提醒',
+        triggerType: 'recurring',
+        title: '每分钟提醒',
+        content: '请检查秒级调度',
+        triggerJson: '{"cron":"0 */5 * * * *"}',
+        status: 'active',
+        nextTriggerAt: new Date('2026-03-29T09:05:00.000Z'),
+        stopReason: null,
+        createdBy: 'manual',
+        note: null,
+        createdAt: new Date('2026-03-28T00:00:00.000Z'),
+        updatedAt: new Date('2026-03-28T00:00:00.000Z'),
+      });
+
+      const result = await service.create('user-1', {
+        name: '秒级提醒',
+        title: '每分钟提醒',
+        content: '请检查秒级调度',
+        triggerType: 'recurring',
+        triggerConfig: { cron: '0 */5 * * * *' },
+        channelIds: ['channel-1'],
+      });
+
+      expect(result.triggerConfig).toEqual({ cron: '0 */5 * * * *' });
+      expect(result.nextTriggerAt).toEqual(
+        new Date('2026-03-29T09:05:00.000Z'),
+      );
+      expect(mockPrisma.notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            triggerJson: '{"cron":"0 */5 * * * *"}',
+            nextTriggerAt: expect.any(Date),
+          }),
+        }),
+      );
+    });
+
+    it('creates webhook notification with hashed token and returns plain token once', async () => {
       mockPrisma.channel.findMany.mockResolvedValue([
         {
           id: 'channel-1',
@@ -228,7 +353,9 @@ describe('NotificationsService', () => {
       });
 
       expect(result.webhookToken).toBeUndefined();
-      expect(result.nextTriggerAt).not.toEqual(new Date('2026-03-29T00:00:00.000Z'));
+      expect(result.nextTriggerAt).not.toEqual(
+        new Date('2026-03-29T00:00:00.000Z'),
+      );
       expect(mockPrisma.notification.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.not.objectContaining({
@@ -240,6 +367,40 @@ describe('NotificationsService', () => {
   });
 
   describe('list', () => {
+    it('returns raw last push result status value', async () => {
+      mockPrisma.notification.findMany.mockResolvedValue([
+        {
+          id: 'notification-1',
+          name: '库存提醒',
+          triggerType: 'once',
+          title: '库存不足',
+          status: 'active',
+          nextTriggerAt: new Date('2026-03-29T08:00:00.000Z'),
+          stopReason: null,
+          note: null,
+          createdAt: new Date('2026-03-28T00:00:00.000Z'),
+          updatedAt: new Date('2026-03-28T00:00:00.000Z'),
+          channels: [
+            { channel: { id: 'channel-1', name: '飞书', type: 'Feishu' } },
+          ],
+          pushRecords: [
+            {
+              result: 'partial',
+              pushedAt: new Date('2026-03-29T08:05:00.000Z'),
+            },
+          ],
+        },
+      ]);
+      mockPrisma.notification.count.mockResolvedValue(1);
+
+      const result = await service.list('user-1', {});
+
+      expect(result.items[0].lastPushResult).toEqual({
+        status: 'partial',
+        pushedAt: new Date('2026-03-29T08:05:00.000Z'),
+      });
+    });
+
     it('returns paginated notifications with filters', async () => {
       mockPrisma.notification.findMany.mockResolvedValue([
         {
@@ -368,9 +529,9 @@ describe('NotificationsService', () => {
     it('treats non-owned notification as not found', async () => {
       mockPrisma.notification.findFirst.mockResolvedValue(null);
 
-      await expect(service.getDetail('user-1', 'notification-404')).rejects.toThrow(
-        new NotFoundException('通知不存在'),
-      );
+      await expect(
+        service.getDetail('user-1', 'notification-404'),
+      ).rejects.toThrow(new NotFoundException('通知不存在'));
     });
   });
 
@@ -439,7 +600,129 @@ describe('NotificationsService', () => {
       });
     });
 
-    it('keeps channelIds absent in response when bindings are unchanged', async () => {
+    it('updates recurring notification with 6-part cron and recalculates nextTriggerAt', async () => {
+      mockPrisma.notification.findFirst.mockResolvedValueOnce({
+        id: 'notification-1',
+        userId: 'user-1',
+        triggerType: 'recurring',
+        triggerJson: '{"cron":"0 9 * * *"}',
+        status: 'active',
+      });
+      mockPrisma.notification.update.mockResolvedValue({
+        id: 'notification-1',
+        name: '库存提醒-更新',
+        triggerType: 'recurring',
+        title: '库存不足',
+        content: '请及时补货',
+        triggerJson: '{"cron":"0 */5 * * * *"}',
+        status: 'active',
+        nextTriggerAt: new Date('2026-03-29T09:05:00.000Z'),
+        stopReason: null,
+        createdBy: 'manual',
+        note: null,
+        createdAt: new Date('2026-03-28T00:00:00.000Z'),
+        updatedAt: new Date('2026-03-28T01:00:00.000Z'),
+      });
+
+      const result = await service.update('user-1', 'notification-1', {
+        triggerType: 'recurring',
+        triggerConfig: { cron: '0 */5 * * * *' },
+      });
+
+      expect(result.triggerConfig).toEqual({ cron: '0 */5 * * * *' });
+      expect(mockPrisma.notification.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            triggerJson: '{"cron":"0 */5 * * * *"}',
+            nextTriggerAt: expect.any(Date),
+          }),
+        }),
+      );
+    });
+
+    it('allows high-frequency 6-part cron when updating recurring notification and setting allows high-frequency scheduling', async () => {
+      mockPrisma.notification.findFirst.mockResolvedValueOnce({
+        id: 'notification-1',
+        userId: 'user-1',
+        triggerType: 'recurring',
+        triggerJson: '{"cron":"0 9 * * *"}',
+        status: 'active',
+      });
+      mockPrisma.userSettings.findUnique.mockResolvedValue({
+        allowHighFrequencyScheduling: true,
+      });
+      mockPrisma.notification.update.mockResolvedValue({
+        id: 'notification-1',
+        name: '库存提醒-更新',
+        triggerType: 'recurring',
+        title: '库存不足',
+        content: '请及时补货',
+        triggerJson: '{"cron":"*/30 * * * * *"}',
+        status: 'active',
+        nextTriggerAt: new Date('2026-03-29T09:00:30.000Z'),
+        stopReason: null,
+        createdBy: 'manual',
+        note: null,
+        createdAt: new Date('2026-03-28T00:00:00.000Z'),
+        updatedAt: new Date('2026-03-28T01:00:00.000Z'),
+      });
+
+      const result = await service.update('user-1', 'notification-1', {
+        triggerType: 'recurring',
+        triggerConfig: { cron: '*/30 * * * * *' },
+      });
+
+      expect(result.triggerConfig).toEqual({ cron: '*/30 * * * * *' });
+      expect(mockPrisma.notification.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            triggerJson: '{"cron":"*/30 * * * * *"}',
+            nextTriggerAt: expect.any(Date),
+          }),
+        }),
+      );
+    });
+
+    it('rejects high-frequency 6-part cron when updating recurring notification and setting disallows high-frequency scheduling', async () => {
+      mockPrisma.notification.findFirst.mockResolvedValueOnce({
+        id: 'notification-1',
+        userId: 'user-1',
+        triggerType: 'recurring',
+        triggerJson: '{"cron":"0 9 * * *"}',
+        status: 'active',
+      });
+      mockPrisma.userSettings.findUnique.mockResolvedValue({
+        allowHighFrequencyScheduling: false,
+      });
+
+      await expect(
+        service.update('user-1', 'notification-1', {
+          triggerType: 'recurring',
+          triggerConfig: { cron: '*/30 * * * * *' },
+        }),
+      ).rejects.toThrow(
+        new BadRequestException('Cron 执行频率不能高于每 5 分钟一次'),
+      );
+    });
+
+    it('rejects invalid 6-part cron when updating recurring notification', async () => {
+      mockPrisma.notification.findFirst.mockResolvedValueOnce({
+        id: 'notification-1',
+        userId: 'user-1',
+        triggerType: 'recurring',
+        triggerJson: '{"cron":"0 9 * * *"}',
+        status: 'active',
+      });
+
+      await expect(
+        service.update('user-1', 'notification-1', {
+          triggerType: 'recurring',
+          triggerConfig: { cron: '60 * * * * *' },
+        }),
+      ).rejects.toThrow(new BadRequestException('Cron 表达式不合法'));
+    });
+
+    it('keeps existing channel bindings when channelIds is omitted', async () => {
       mockPrisma.notification.findFirst.mockResolvedValueOnce({
         id: 'notification-1',
         userId: 'user-1',
@@ -471,6 +754,43 @@ describe('NotificationsService', () => {
       expect(mockPrisma.notificationChannel.deleteMany).not.toHaveBeenCalled();
       expect(mockPrisma.notificationChannel.createMany).not.toHaveBeenCalled();
     });
+
+    it('sets nextTriggerAt to null when updating disabled notification', async () => {
+      mockPrisma.notification.findFirst.mockResolvedValueOnce({
+        id: 'notification-1',
+        userId: 'user-1',
+        triggerType: 'recurring',
+        triggerJson: '{"cron":"0 9 * * *"}',
+        status: 'disabled',
+      });
+      mockPrisma.notification.update.mockResolvedValue({
+        id: 'notification-1',
+        name: '库存提醒',
+        triggerType: 'recurring',
+        title: '标题',
+        content: '内容',
+        triggerJson: '{"cron":"0 9 * * *"}',
+        status: 'disabled',
+        nextTriggerAt: null,
+        stopReason: null,
+        createdBy: 'manual',
+        note: null,
+        createdAt: new Date('2026-03-28T00:00:00.000Z'),
+        updatedAt: new Date('2026-03-28T01:00:00.000Z'),
+      });
+
+      const result = await service.update('user-1', 'notification-1', {
+        title: '新标题',
+      });
+
+      expect(mockPrisma.notification.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            nextTriggerAt: null,
+          }),
+        }),
+      );
+    });
   });
 
   describe('updateStatus', () => {
@@ -488,7 +808,183 @@ describe('NotificationsService', () => {
         service.updateStatus('user-1', 'notification-1', {
           status: 'active',
         }),
-      ).rejects.toThrow(new BadRequestException('启用失败，至少需要一个启用中的渠道'));
+      ).rejects.toThrow(
+        new BadRequestException('启用失败，至少需要一个启用中的渠道'),
+      );
+    });
+
+    it('clears nextTriggerAt when disabling notification', async () => {
+      mockPrisma.notification.findFirst.mockResolvedValue({
+        id: 'notification-1',
+        userId: 'user-1',
+        triggerType: 'once',
+        triggerJson: '{"executeAt":"2026-03-29T08:00:00.000Z"}',
+        status: 'active',
+      });
+      mockPrisma.notification.update.mockResolvedValue({
+        id: 'notification-1',
+        status: 'disabled',
+        nextTriggerAt: null,
+      });
+
+      const result = await service.updateStatus('user-1', 'notification-1', {
+        status: 'disabled',
+      });
+
+      expect(result).toEqual({
+        id: 'notification-1',
+        status: 'disabled',
+        nextTriggerAt: null,
+      });
+      expect(mockPrisma.notification.update).toHaveBeenCalledWith({
+        where: { id: 'notification-1' },
+        data: {
+          status: 'disabled',
+          nextTriggerAt: null,
+        },
+      });
+    });
+
+    it('recalculates nextTriggerAt when enabling once notification', async () => {
+      mockPrisma.notification.findFirst.mockResolvedValue({
+        id: 'notification-1',
+        userId: 'user-1',
+        triggerType: 'once',
+        triggerJson: '{"executeAt":"2026-03-29T08:00:00.000Z"}',
+        status: 'disabled',
+      });
+      mockPrisma.notificationChannel.count.mockResolvedValue(1);
+      mockPrisma.notification.update.mockResolvedValue({
+        id: 'notification-1',
+        status: 'active',
+        nextTriggerAt: new Date('2026-03-29T08:00:00.000Z'),
+        stopReason: null,
+      });
+
+      const result = await service.updateStatus('user-1', 'notification-1', {
+        status: 'active',
+      });
+
+      expect(result).toEqual({
+        id: 'notification-1',
+        status: 'active',
+        nextTriggerAt: new Date('2026-03-29T08:00:00.000Z'),
+        stopReason: null,
+      });
+      expect(mockPrisma.notification.update).toHaveBeenCalledWith({
+        where: { id: 'notification-1' },
+        data: {
+          status: 'active',
+          nextTriggerAt: new Date('2026-03-29T08:00:00.000Z'),
+          stopReason: null,
+        },
+      });
+    });
+
+    it('allows enabling recurring notification with high-frequency cron when setting allows high-frequency scheduling', async () => {
+      const nextTriggerAt = new Date('2026-03-29T08:00:30.000Z');
+      mockPrisma.notification.findFirst.mockResolvedValue({
+        id: 'notification-1',
+        userId: 'user-1',
+        triggerType: 'recurring',
+        triggerJson: '{"cron":"*/30 * * * * *"}',
+        status: 'disabled',
+      });
+      mockPrisma.notificationChannel.count.mockResolvedValue(1);
+      mockPrisma.userSettings.findUnique.mockResolvedValue({
+        allowHighFrequencyScheduling: true,
+      });
+      jest
+        .spyOn(service as never, 'calculateNextTriggerAt' as never)
+        .mockReturnValue(nextTriggerAt as never);
+      mockPrisma.notification.update.mockResolvedValue({
+        id: 'notification-1',
+        status: 'active',
+        nextTriggerAt,
+        stopReason: null,
+      });
+
+      const result = await service.updateStatus('user-1', 'notification-1', {
+        status: 'active',
+      });
+
+      expect(result).toEqual({
+        id: 'notification-1',
+        status: 'active',
+        nextTriggerAt,
+        stopReason: null,
+      });
+      expect(mockPrisma.notification.update).toHaveBeenCalledWith({
+        where: { id: 'notification-1' },
+        data: {
+          status: 'active',
+          nextTriggerAt,
+          stopReason: null,
+        },
+      });
+    });
+
+    it('rejects enabling recurring notification with high-frequency cron when setting disallows high-frequency scheduling', async () => {
+      mockPrisma.notification.findFirst.mockResolvedValue({
+        id: 'notification-1',
+        userId: 'user-1',
+        triggerType: 'recurring',
+        triggerJson: '{"cron":"*/30 * * * * *"}',
+        status: 'disabled',
+      });
+      mockPrisma.notificationChannel.count.mockResolvedValue(1);
+      mockPrisma.userSettings.findUnique.mockResolvedValue({
+        allowHighFrequencyScheduling: false,
+      });
+
+      await expect(
+        service.updateStatus('user-1', 'notification-1', {
+          status: 'active',
+        }),
+      ).rejects.toThrow(
+        new BadRequestException('Cron 执行频率不能高于每 5 分钟一次'),
+      );
+      expect(mockPrisma.notification.update).not.toHaveBeenCalled();
+    });
+
+    it('recalculates nextTriggerAt when enabling recurring notification', async () => {
+      const nextTriggerAt = new Date('2026-03-29T08:30:00.000Z');
+      mockPrisma.notification.findFirst.mockResolvedValue({
+        id: 'notification-1',
+        userId: 'user-1',
+        triggerType: 'recurring',
+        triggerJson: '{"cron":"0 */5 * * * *"}',
+        status: 'disabled',
+      });
+      mockPrisma.notificationChannel.count.mockResolvedValue(1);
+      jest
+        .spyOn(service as never, 'calculateNextTriggerAt' as never)
+        .mockReturnValue(nextTriggerAt as never);
+      mockPrisma.notification.update.mockResolvedValue({
+        id: 'notification-1',
+        status: 'active',
+        nextTriggerAt,
+        stopReason: null,
+      });
+
+      const result = await service.updateStatus('user-1', 'notification-1', {
+        status: 'active',
+      });
+
+      expect(result).toEqual({
+        id: 'notification-1',
+        status: 'active',
+        nextTriggerAt,
+        stopReason: null,
+      });
+      expect(mockPrisma.notification.update).toHaveBeenCalledWith({
+        where: { id: 'notification-1' },
+        data: {
+          status: 'active',
+          nextTriggerAt,
+          stopReason: null,
+        },
+      });
     });
 
     it('reactivates blocked notification and clears stopReason', async () => {
@@ -503,6 +999,7 @@ describe('NotificationsService', () => {
       mockPrisma.notification.update.mockResolvedValue({
         id: 'notification-1',
         status: 'active',
+        nextTriggerAt: null,
         stopReason: null,
       });
 
@@ -513,12 +1010,14 @@ describe('NotificationsService', () => {
       expect(result).toEqual({
         id: 'notification-1',
         status: 'active',
+        nextTriggerAt: null,
         stopReason: null,
       });
       expect(mockPrisma.notification.update).toHaveBeenCalledWith({
         where: { id: 'notification-1' },
         data: {
           status: 'active',
+          nextTriggerAt: null,
           stopReason: null,
         },
       });
@@ -537,7 +1036,9 @@ describe('NotificationsService', () => {
         service.updateStatus('user-1', 'notification-1', {
           status: 'active',
         }),
-      ).rejects.toThrow(new BadRequestException('已完成通知不支持手动修改状态'));
+      ).rejects.toThrow(
+        new BadRequestException('已完成通知不支持手动修改状态'),
+      );
     });
   });
 
@@ -584,7 +1085,9 @@ describe('NotificationsService', () => {
         status: 'active',
       });
 
-      await expect(service.completeOnceNotification('notification-2')).rejects.toThrow(
+      await expect(
+        service.completeOnceNotification('notification-2'),
+      ).rejects.toThrow(
         new BadRequestException('只有 once 通知支持完成态流转'),
       );
     });
@@ -603,7 +1106,10 @@ describe('NotificationsService', () => {
         id: 'notification-1',
       });
 
-      const result = await service.resetWebhookToken('user-1', 'notification-1');
+      const result = await service.resetWebhookToken(
+        'user-1',
+        'notification-1',
+      );
 
       expect(result).toEqual({ webhookToken: expect.any(String) });
       expect(mockPrisma.notification.update).toHaveBeenCalledWith(
@@ -627,7 +1133,9 @@ describe('NotificationsService', () => {
 
       await expect(
         service.resetWebhookToken('user-1', 'notification-2'),
-      ).rejects.toThrow(new BadRequestException('只有 webhook 通知支持 token 重置'));
+      ).rejects.toThrow(
+        new BadRequestException('只有 webhook 通知支持 token 重置'),
+      );
     });
   });
 
@@ -635,9 +1143,9 @@ describe('NotificationsService', () => {
     it('rejects invalid token', async () => {
       mockPrisma.notification.findMany.mockResolvedValue([]);
 
-      await expect(service.triggerByWebhookToken('invalid-token')).rejects.toThrow(
-        new NotFoundException('Webhook 通知不存在'),
-      );
+      await expect(
+        service.triggerByWebhookToken('invalid-token'),
+      ).rejects.toThrow(new NotFoundException('Webhook 通知不存在'));
     });
 
     it('rejects disabled webhook notification', async () => {
@@ -651,9 +1159,9 @@ describe('NotificationsService', () => {
         },
       ]);
 
-      await expect(service.triggerByWebhookToken('plain-token')).rejects.toThrow(
-        new BadRequestException('通知未启用'),
-      );
+      await expect(
+        service.triggerByWebhookToken('plain-token'),
+      ).rejects.toThrow(new BadRequestException('通知未启用'));
     });
 
     it('returns minimal success result when token matches active webhook notification', async () => {
@@ -669,7 +1177,10 @@ describe('NotificationsService', () => {
 
       const result = await service.triggerByWebhookToken('plain-token');
 
-      expect(result).toEqual({ success: true, notificationId: 'notification-1' });
+      expect(result).toEqual({
+        success: true,
+        notificationId: 'notification-1',
+      });
     });
   });
 
@@ -696,8 +1207,14 @@ describe('NotificationsService', () => {
       const result = await service.listDueNotifications(now, 50);
 
       expect(result).toEqual([
-        expect.objectContaining({ id: 'notification-once', triggerType: 'once' }),
-        expect.objectContaining({ id: 'notification-recurring', triggerType: 'recurring' }),
+        expect.objectContaining({
+          id: 'notification-once',
+          triggerType: 'once',
+        }),
+        expect.objectContaining({
+          id: 'notification-recurring',
+          triggerType: 'recurring',
+        }),
       ]);
       expect(mockPrisma.notification.findMany).toHaveBeenCalledWith({
         where: {
@@ -731,7 +1248,9 @@ describe('NotificationsService', () => {
         nextTriggerAt: new Date('2026-03-30T09:00:00.000Z'),
       });
 
-      const result = await service.advanceRecurringNotification('notification-recurring');
+      const result = await service.advanceRecurringNotification(
+        'notification-recurring',
+      );
 
       expect(result).toEqual({
         id: 'notification-recurring',
@@ -739,14 +1258,57 @@ describe('NotificationsService', () => {
         nextTriggerAt: new Date('2026-03-30T09:00:00.000Z'),
       });
       expect(mockPrisma.notification.update).toHaveBeenCalledWith({
-        where: { id: 'notification-recurring', status: 'active', triggerType: 'recurring' },
+        where: {
+          id: 'notification-recurring',
+          status: 'active',
+          triggerType: 'recurring',
+        },
         data: {
           nextTriggerAt: expect.any(Date),
         },
       });
     });
 
-    it('rejects advancing recurring notification when it is no longer active', async () => {
+    it('advances recurring notification with 6-part cron to a later trigger time', async () => {
+      const expectedNextTriggerAt = new Date('2026-03-29T09:05:00.000Z');
+
+      mockPrisma.notification.findFirst.mockResolvedValue({
+        id: 'notification-recurring',
+        userId: 'user-1',
+        triggerType: 'recurring',
+        triggerJson: '{"cron":"0 */5 * * * *"}',
+        status: 'active',
+      });
+      mockPrisma.notification.update.mockImplementation(
+        ({ data }: { data: { nextTriggerAt: Date } }) =>
+          Promise.resolve({
+            id: 'notification-recurring',
+            status: 'active',
+            nextTriggerAt: data.nextTriggerAt,
+          }),
+      );
+      const nextTriggerSpy = jest
+        .spyOn(
+          service as unknown as {
+            calculateRecurringNextTriggerAt: (cron: string) => Date;
+          },
+          'calculateRecurringNextTriggerAt',
+        )
+        .mockReturnValue(expectedNextTriggerAt);
+
+      const result = await service.advanceRecurringNotification(
+        'notification-recurring',
+      );
+
+      expect(nextTriggerSpy).toHaveBeenCalledWith('0 */5 * * * *');
+      expect(result).toEqual({
+        id: 'notification-recurring',
+        status: 'active',
+        nextTriggerAt: expectedNextTriggerAt,
+      });
+    });
+
+    it('rejects advancing inactive recurring notification from scheduler', async () => {
       mockPrisma.notification.findFirst.mockResolvedValue({
         id: 'notification-recurring',
         userId: 'user-1',
@@ -755,7 +1317,9 @@ describe('NotificationsService', () => {
         status: 'disabled',
       });
 
-      await expect(service.advanceRecurringNotification('notification-recurring')).rejects.toThrow(
+      await expect(
+        service.advanceRecurringNotification('notification-recurring'),
+      ).rejects.toThrow(
         new BadRequestException('只有 active recurring 通知支持调度推进'),
       );
     });
@@ -769,7 +1333,9 @@ describe('NotificationsService', () => {
         status: 'active',
       });
 
-      await expect(service.advanceRecurringNotification('notification-webhook')).rejects.toThrow(
+      await expect(
+        service.advanceRecurringNotification('notification-webhook'),
+      ).rejects.toThrow(
         new BadRequestException('只有 recurring 通知支持调度推进'),
       );
     });

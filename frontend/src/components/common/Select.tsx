@@ -102,7 +102,7 @@ export function Select({
             }}
             style={{
               width: '100%',
-              padding: '10px 16px',
+              padding: '8px 16px',
               background: isSelected ? 'var(--muted-card)' : 'transparent',
               color: isSelected ? 'var(--primary)' : 'var(--input-text)',
               fontWeight: isSelected ? 700 : 400,

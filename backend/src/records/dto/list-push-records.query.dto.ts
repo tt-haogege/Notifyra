@@ -12,12 +12,14 @@ export class ListPushRecordsQueryDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['success', 'failed', 'pending'], { message: 'result不合法' })
-  result?: 'success' | 'failed' | 'pending';
+  @IsIn(['success', 'partial', 'failure'], { message: 'result不合法' })
+  result?: 'success' | 'partial' | 'failure';
 
   @IsOptional()
   @IsString()
-  @IsIn(['scheduler', 'webhook', 'test_notification', 'channel_api'], { message: 'source不合法' })
+  @IsIn(['scheduler', 'webhook', 'test_notification', 'channel_api'], {
+    message: 'source不合法',
+  })
   source?: string;
 
   @IsOptional()

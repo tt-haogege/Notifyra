@@ -14,7 +14,7 @@ export function TriggerTypeSelector({
   onChange: (v: TriggerType) => void;
 }) {
   return (
-    <div className="trigger-selector">
+    <div className="trigger-selector mb-2">
       {(['once', 'recurring', 'webhook'] as TriggerType[]).map((t) => (
         <button
           key={t}

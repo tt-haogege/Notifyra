@@ -87,6 +87,16 @@ export default function ChannelsListPage() {
               ...CHANNEL_TYPE_OPTIONS,
             ]}
           />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+            <button
+              className="icon-button"
+              type="button"
+              title="刷新"
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['channels'] })}
+            >
+              ↻
+            </button>
+          </div>
         </div>
       </Card>
       <div className="table-card">

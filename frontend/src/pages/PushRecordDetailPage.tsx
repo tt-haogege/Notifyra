@@ -50,8 +50,8 @@ export default function PushRecordDetailPage() {
           <div className="stack-gap">
             <div className="detail-pair">
               <span className="muted-text">状态</span>
-              <StatusBadge tone={record.status === 'success' ? 'green' : record.status === 'failed' ? 'red' : 'blue'}>
-                {record.status === 'success' ? '成功' : record.status === 'failed' ? '失败' : '处理中'}
+              <StatusBadge tone={record.status === 'success' ? 'green' : record.status === 'failure' ? 'red' : 'orange'}>
+                {record.status === 'success' ? '成功' : record.status === 'failure' ? '失败' : '部分成功'}
               </StatusBadge>
             </div>
             <div className="detail-pair">

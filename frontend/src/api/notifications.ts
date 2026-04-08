@@ -27,12 +27,12 @@ export interface Notification {
   updatedAt: string;
   boundChannelCount?: number;
   webhookEnabled?: boolean;
-  lastPushResult?: { status: 'success' | 'failed' | 'pending'; pushedAt: string } | null;
+  lastPushResult?: { status: 'success' | 'partial' | 'failure'; pushedAt: string } | null;
   recentRecords?: Array<{
     id: string;
     title: string;
     content: string;
-    result: 'success' | 'failed' | 'pending';
+    result: 'success' | 'partial' | 'failure';
     errorMessage?: string;
     pushedAt: string;
     channelName: string;

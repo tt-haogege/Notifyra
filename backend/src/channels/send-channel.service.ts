@@ -5,10 +5,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../shared/prisma/prisma.service';
-import {
-  normalizeChannelType,
-  parseChannelConfig,
-} from './channel-normalizer';
+import { normalizeChannelType, parseChannelConfig } from './channel-normalizer';
 import { ChannelDriverRegistry } from './drivers/channel-driver.registry';
 import { ChannelDriverSendResult } from './drivers/channel-driver.interface';
 
@@ -136,7 +133,7 @@ export class SendChannelService {
         source: 'channel_api',
         titleSnapshot: input.title,
         contentSnapshot: input.content,
-        result: result.success ? 'success' : 'failed',
+        result: result.success ? 'success' : 'failure',
         errorSummary: result.errorMessage,
       },
     });
@@ -145,7 +142,7 @@ export class SendChannelService {
       data: {
         pushRecordId: pushRecord.id,
         channelId: channel.id,
-        result: result.success ? 'success' : 'failed',
+        result: result.success ? 'success' : 'failure',
         errorMessage: result.errorMessage,
         retryAttempts: 0,
       },

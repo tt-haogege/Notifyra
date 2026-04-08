@@ -39,6 +39,7 @@ describe('SettingsService', () => {
         afternoonTime: '14:00',
         eveningTime: '20:00',
         tomorrowMorningTime: '08:00',
+        allowHighFrequencyScheduling: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -51,6 +52,7 @@ describe('SettingsService', () => {
       expect(result.afternoonTime).toBe('14:00');
       expect(result.eveningTime).toBe('20:00');
       expect(result.tomorrowMorningTime).toBe('08:00');
+      expect(result.allowHighFrequencyScheduling).toBe(true);
     });
 
     it('creates settings if not exists and returns defaults', async () => {
@@ -64,6 +66,7 @@ describe('SettingsService', () => {
         afternoonTime: null,
         eveningTime: null,
         tomorrowMorningTime: null,
+        allowHighFrequencyScheduling: false,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -75,6 +78,7 @@ describe('SettingsService', () => {
         data: { userId: 'user-1' },
       });
       expect(result.aiBaseUrl).toBeNull();
+      expect(result.allowHighFrequencyScheduling).toBe(false);
     });
   });
 
@@ -89,6 +93,7 @@ describe('SettingsService', () => {
         afternoonTime: '14:00',
         eveningTime: null,
         tomorrowMorningTime: null,
+        allowHighFrequencyScheduling: false,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -112,6 +117,7 @@ describe('SettingsService', () => {
         },
       });
       expect(result.aiModel).toBe('gpt-4o');
+      expect(result.allowHighFrequencyScheduling).toBe(false);
     });
 
     it('updates time preferences', async () => {
@@ -124,6 +130,7 @@ describe('SettingsService', () => {
         afternoonTime: null,
         eveningTime: null,
         tomorrowMorningTime: null,
+        allowHighFrequencyScheduling: false,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -133,17 +140,29 @@ describe('SettingsService', () => {
         afternoonTime: '15:00',
         eveningTime: '21:00',
         tomorrowMorningTime: '09:00',
+        allowHighFrequencyScheduling: true,
       });
 
       const result = await service.update('user-1', {
         afternoonTime: '15:00',
         eveningTime: '21:00',
         tomorrowMorningTime: '09:00',
+        allowHighFrequencyScheduling: true,
       });
 
+      expect(mockPrisma.userSettings.update).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+        data: {
+          afternoonTime: '15:00',
+          eveningTime: '21:00',
+          tomorrowMorningTime: '09:00',
+          allowHighFrequencyScheduling: true,
+        },
+      });
       expect(result.afternoonTime).toBe('15:00');
       expect(result.eveningTime).toBe('21:00');
       expect(result.tomorrowMorningTime).toBe('09:00');
+      expect(result.allowHighFrequencyScheduling).toBe(true);
     });
 
     it('creates settings before update if not exists', async () => {
@@ -157,6 +176,7 @@ describe('SettingsService', () => {
         afternoonTime: null,
         eveningTime: null,
         tomorrowMorningTime: null,
+        allowHighFrequencyScheduling: false,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -164,11 +184,94 @@ describe('SettingsService', () => {
       mockPrisma.userSettings.update.mockResolvedValue({
         ...createdSettings,
         aiBaseUrl: 'https://api.openai.com',
+        allowHighFrequencyScheduling: true,
       });
 
-      await service.update('user-1', { aiBaseUrl: 'https://api.openai.com' });
+      const result = await service.update('user-1', {
+        aiBaseUrl: 'https://api.openai.com',
+        allowHighFrequencyScheduling: true,
+      });
 
       expect(mockPrisma.userSettings.create).toHaveBeenCalled();
+      expect(mockPrisma.userSettings.update).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+        data: {
+          aiBaseUrl: 'https://api.openai.com',
+          allowHighFrequencyScheduling: true,
+        },
+      });
+      expect(result.allowHighFrequencyScheduling).toBe(true);
+    });
+
+    it('does not clear aiApiKey when empty string is passed', async () => {
+      const existingSettings = {
+        id: 'settings-1',
+        userId: 'user-1',
+        aiBaseUrl: 'https://api.openai.com',
+        aiApiKeyEncrypted: 'old-encrypted-key',
+        aiModel: 'gpt-4o-mini',
+        afternoonTime: '14:00',
+        eveningTime: null,
+        tomorrowMorningTime: null,
+        allowHighFrequencyScheduling: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      mockPrisma.userSettings.findUnique.mockResolvedValue(existingSettings);
+      mockPrisma.userSettings.update.mockResolvedValue({
+        ...existingSettings,
+        afternoonTime: '15:00',
+      });
+
+      const result = await service.update('user-1', {
+        afternoonTime: '15:00',
+        aiApiKey: null,
+      });
+
+      expect(mockPrisma.userSettings.update).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+        data: {
+          afternoonTime: '15:00',
+        },
+      });
+      expect(result.afternoonTime).toBe('15:00');
+    });
+
+    it('updates aiApiKey when non-empty string is passed', async () => {
+      const existingSettings = {
+        id: 'settings-1',
+        userId: 'user-1',
+        aiBaseUrl: 'https://api.openai.com',
+        aiApiKeyEncrypted: 'old-key',
+        aiModel: 'gpt-4o-mini',
+        afternoonTime: '14:00',
+        eveningTime: null,
+        tomorrowMorningTime: null,
+        allowHighFrequencyScheduling: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      mockPrisma.userSettings.findUnique.mockResolvedValue(existingSettings);
+      mockPrisma.userSettings.update.mockResolvedValue({
+        ...existingSettings,
+        aiApiKeyEncrypted: 'new-key',
+      });
+
+      const result = await service.update('user-1', {
+        aiApiKey: 'new-key',
+      });
+
+      expect(mockPrisma.userSettings.update).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+        data: {
+          aiApiKeyEncrypted: 'new-key',
+        },
+      });
+      expect(result).toEqual(
+        expect.objectContaining({
+          hasAiApiKey: true,
+        }),
+      );
     });
   });
 });

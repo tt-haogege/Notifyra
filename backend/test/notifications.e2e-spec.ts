@@ -4,8 +4,30 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { AppModule } from '../src/app.module';
 import { NotificationSchedulerService } from '../src/notifications/notification-scheduler.service';
+import { NotificationsService } from '../src/notifications/notifications.service';
+import { ChannelDriverRegistry } from '../src/channels/drivers/channel-driver.registry';
 import { AllExceptionsFilter } from '../src/shared/all-exceptions.filter';
 import { TransformInterceptor } from '../src/shared/response.interceptor';
+
+jest.mock('node-schedule', () => {
+  const actual = jest.requireActual(
+    'node-schedule',
+  ) as typeof import('node-schedule');
+
+  return {
+    ...actual,
+    scheduleJob: jest.fn((expression: string, callback: () => void) => {
+      if (expression === '* * * * * *') {
+        return {
+          cancel: jest.fn(),
+          nextInvocation: () => null,
+        };
+      }
+
+      return actual.scheduleJob(expression, callback);
+    }),
+  };
+});
 
 type MockUser = {
   id: string;
@@ -52,10 +74,24 @@ type MockNotificationChannel = {
   channelId: string;
 };
 
+type MockPushRecord = {
+  id: string;
+  notificationId: string;
+  userId: string;
+  channelId: string;
+  source: string;
+  titleSnapshot: string;
+  contentSnapshot: string;
+  result: 'success' | 'partial' | 'failure';
+  errorSummary?: string | null;
+  pushedAt: Date;
+};
+
 const mockUsers = new Map<string, MockUser>();
 const mockChannels = new Map<string, MockChannel>();
 const mockNotifications = new Map<string, MockNotification>();
 const mockNotificationChannels: MockNotificationChannel[] = [];
+const mockPushRecords: MockPushRecord[] = [];
 
 const pickSelectedFields = <T extends Record<string, unknown>>(
   data: T,
@@ -72,15 +108,15 @@ const pickSelectedFields = <T extends Record<string, unknown>>(
 const matchesChannelWhere = (
   channel: MockChannel,
   where?: {
-    id?: string;
-    id?: { in: string[] };
+    id?: string | { in: string[] };
     userId?: string;
     status?: string;
   },
 ) => {
   if (!where) return true;
   if (typeof where.id === 'string' && channel.id !== where.id) return false;
-  if (typeof where.id === 'object' && !where.id.in.includes(channel.id)) return false;
+  if (typeof where.id === 'object' && !where.id.in.includes(channel.id))
+    return false;
   if (where.userId && channel.userId !== where.userId) return false;
   if (where.status && channel.status !== where.status) return false;
   return true;
@@ -100,7 +136,10 @@ const matchesNotificationWhere = (
   if (!where) return true;
   if (where.id && notification.id !== where.id) return false;
   if (where.userId && notification.userId !== where.userId) return false;
-  if (typeof where.triggerType === 'string' && notification.triggerType !== where.triggerType) {
+  if (
+    typeof where.triggerType === 'string' &&
+    notification.triggerType !== where.triggerType
+  ) {
     return false;
   }
   if (
@@ -112,9 +151,15 @@ const matchesNotificationWhere = (
   if (where.status && notification.status !== where.status) return false;
   if (where.nextTriggerAt?.lte) {
     if (!notification.nextTriggerAt) return false;
-    if (notification.nextTriggerAt.getTime() > where.nextTriggerAt.lte.getTime()) return false;
+    if (
+      notification.nextTriggerAt.getTime() > where.nextTriggerAt.lte.getTime()
+    )
+      return false;
   }
-  if (where.name?.contains && !notification.name.includes(where.name.contains)) {
+  if (
+    where.name?.contains &&
+    !notification.name.includes(where.name.contains)
+  ) {
     return false;
   }
   return true;
@@ -131,7 +176,9 @@ const mockPrismaClient = {
         select?: Record<string, boolean>;
       }) => {
         const user = Array.from(mockUsers.values()).find((item) =>
-          where.username ? item.username === where.username : item.id === where.id,
+          where.username
+            ? item.username === where.username
+            : item.id === where.id,
         );
         if (!user) return Promise.resolve(null);
         return Promise.resolve(pickSelectedFields(user, select));
@@ -172,7 +219,11 @@ const mockPrismaClient = {
   },
   notification: {
     create: jest.fn(
-      ({ data }: { data: Omit<MockNotification, 'id' | 'createdAt' | 'updatedAt'> }) => {
+      ({
+        data,
+      }: {
+        data: Omit<MockNotification, 'id' | 'createdAt' | 'updatedAt'>;
+      }) => {
         const notification: MockNotification = {
           id: randomUUID(),
           webhookTokenHash: null,
@@ -190,27 +241,76 @@ const mockPrismaClient = {
         skip = 0,
         take,
         select,
+        include,
         orderBy,
       }: {
         where?: Parameters<typeof matchesNotificationWhere>[1];
         skip?: number;
         take?: number;
         select?: Record<string, unknown>;
-        orderBy?: { updatedAt?: 'desc' | 'asc'; nextTriggerAt?: 'desc' | 'asc' };
+        include?: {
+          channels?: {
+            include?: { channel?: { select?: Record<string, boolean> } };
+          };
+          pushRecords?: { take?: number; select?: Record<string, boolean> };
+        };
+        orderBy?: {
+          updatedAt?: 'desc' | 'asc';
+          nextTriggerAt?: 'desc' | 'asc';
+        };
       }) => {
         const items = Array.from(mockNotifications.values())
           .filter((item) => matchesNotificationWhere(item, where))
           .sort((a, b) => {
             if (orderBy?.nextTriggerAt === 'asc') {
-              return (a.nextTriggerAt?.getTime() ?? Number.MAX_SAFE_INTEGER) -
-                (b.nextTriggerAt?.getTime() ?? Number.MAX_SAFE_INTEGER);
+              return (
+                (a.nextTriggerAt?.getTime() ?? Number.MAX_SAFE_INTEGER) -
+                (b.nextTriggerAt?.getTime() ?? Number.MAX_SAFE_INTEGER)
+              );
             }
 
             return b.updatedAt.getTime() - a.updatedAt.getTime();
           })
           .slice(skip, take ? skip + take : undefined)
           .map((item) => {
-            const selected = pickSelectedFields(item, select as Record<string, boolean>);
+            const selected = pickSelectedFields(
+              item,
+              select as Record<string, boolean>,
+            );
+            const channelSelect =
+              include?.channels?.include?.channel?.select ??
+              (select?.channels &&
+              typeof select.channels === 'object' &&
+              'include' in select.channels &&
+              select.channels.include?.channel &&
+              typeof select.channels.include.channel === 'object' &&
+              'select' in select.channels.include.channel
+                ? (select.channels.include.channel.select as Record<
+                    string,
+                    boolean
+                  >)
+                : { id: true, name: true, type: true, status: true });
+            const channels = mockNotificationChannels
+              .filter((relation) => relation.notificationId === item.id)
+              .map((relation) => ({
+                channel: pickSelectedFields(
+                  mockChannels.get(relation.channelId) as MockChannel,
+                  channelSelect,
+                ),
+              }));
+            const pushRecords = mockPushRecords
+              .filter((record) => record.notificationId === item.id)
+              .sort((a, b) => b.pushedAt.getTime() - a.pushedAt.getTime())
+              .slice(0, include?.pushRecords?.take ?? 1)
+              .map((record) =>
+                pickSelectedFields(
+                  record,
+                  include?.pushRecords?.select ?? {
+                    result: true,
+                    pushedAt: true,
+                  },
+                ),
+              );
             if (select?._count) {
               return {
                 ...selected,
@@ -221,17 +321,29 @@ const mockPrismaClient = {
                 },
               };
             }
-            return selected;
+            return {
+              ...selected,
+              ...(select?.channels || include?.channels ? { channels } : {}),
+              ...(select?.pushRecords || include?.pushRecords
+                ? { pushRecords }
+                : {}),
+            };
           });
         return Promise.resolve(items);
       },
     ),
-    count: jest.fn(({ where }: { where?: Parameters<typeof matchesNotificationWhere>[1] }) => {
-      const count = Array.from(mockNotifications.values()).filter((item) =>
-        matchesNotificationWhere(item, where),
-      ).length;
-      return Promise.resolve(count);
-    }),
+    count: jest.fn(
+      ({
+        where,
+      }: {
+        where?: Parameters<typeof matchesNotificationWhere>[1];
+      }) => {
+        const count = Array.from(mockNotifications.values()).filter((item) =>
+          matchesNotificationWhere(item, where),
+        ).length;
+        return Promise.resolve(count);
+      },
+    ),
     findFirst: jest.fn(
       ({
         where,
@@ -242,11 +354,14 @@ const mockPrismaClient = {
         select?: Record<string, unknown>;
         include?: { channels?: { include?: { channel?: boolean } } };
       }) => {
-        const notification = Array.from(mockNotifications.values()).find((item) =>
-          matchesNotificationWhere(item, where),
+        const notification = Array.from(mockNotifications.values()).find(
+          (item) => matchesNotificationWhere(item, where),
         );
         if (!notification) return Promise.resolve(null);
-        const selected = pickSelectedFields(notification, select as Record<string, boolean>);
+        const selected = pickSelectedFields(
+          notification,
+          select as Record<string, boolean>,
+        );
         if (select?.channels || include?.channels) {
           return Promise.resolve({
             ...selected,
@@ -254,14 +369,17 @@ const mockPrismaClient = {
               .filter((relation) => relation.notificationId === notification.id)
               .map((relation) => ({
                 channel: {
-                  ...pickSelectedFields(mockChannels.get(relation.channelId) as MockChannel, {
-                    id: true,
-                    name: true,
-                    type: true,
-                    status: true,
-                    configJson: true,
-                    retryCount: true,
-                  }),
+                  ...pickSelectedFields(
+                    mockChannels.get(relation.channelId) as MockChannel,
+                    {
+                      id: true,
+                      name: true,
+                      type: true,
+                      status: true,
+                      configJson: true,
+                      retryCount: true,
+                    },
+                  ),
                 },
               })),
           });
@@ -289,7 +407,11 @@ const mockPrismaClient = {
     ),
     delete: jest.fn(({ where }: { where: { id: string } }) => {
       mockNotifications.delete(where.id);
-      for (let index = mockNotificationChannels.length - 1; index >= 0; index -= 1) {
+      for (
+        let index = mockNotificationChannels.length - 1;
+        index >= 0;
+        index -= 1
+      ) {
         if (mockNotificationChannels[index].notificationId === where.id) {
           mockNotificationChannels.splice(index, 1);
         }
@@ -299,8 +421,52 @@ const mockPrismaClient = {
   },
   pushRecord: {
     create: jest.fn(({ data }: { data: Record<string, unknown> }) => {
-      return Promise.resolve({ id: `push-record-${Date.now()}`, ...data });
+      const pushRecord: MockPushRecord = {
+        id: `push-record-${Date.now()}`,
+        notificationId: data.notificationId as string,
+        userId: data.userId as string,
+        channelId: data.channelId as string,
+        source: data.source as string,
+        titleSnapshot: data.titleSnapshot as string,
+        contentSnapshot: data.contentSnapshot as string,
+        result: data.result as 'success' | 'partial' | 'failure',
+        errorSummary: (data.errorSummary as string | null | undefined) ?? null,
+        pushedAt: new Date(),
+      };
+      mockPushRecords.push(pushRecord);
+      return Promise.resolve(pushRecord);
     }),
+    findMany: jest.fn(
+      ({
+        where,
+        take,
+      }: {
+        where?: { notificationId?: string };
+        take?: number;
+      }) => {
+        const items = mockPushRecords
+          .filter((record) =>
+            where?.notificationId
+              ? record.notificationId === where.notificationId
+              : true,
+          )
+          .sort((a, b) => b.pushedAt.getTime() - a.pushedAt.getTime())
+          .slice(0, take)
+          .map((record) => ({
+            id: record.id,
+            titleSnapshot: record.titleSnapshot,
+            contentSnapshot: record.contentSnapshot,
+            result: record.result,
+            errorSummary: record.errorSummary,
+            pushedAt: record.pushedAt,
+            channel: pickSelectedFields(
+              mockChannels.get(record.channelId) as MockChannel,
+              { id: true, name: true, type: true },
+            ),
+          }));
+        return Promise.resolve(items);
+      },
+    ),
   },
   channelPushResult: {
     create: jest.fn(({ data }: { data: Record<string, unknown> }) => {
@@ -313,16 +479,21 @@ const mockPrismaClient = {
     }),
   },
   notificationChannel: {
-    createMany: jest.fn(
-      ({ data }: { data: MockNotificationChannel[] }) => {
-        mockNotificationChannels.push(...data);
-        return Promise.resolve({ count: data.length });
-      },
-    ),
+    createMany: jest.fn(({ data }: { data: MockNotificationChannel[] }) => {
+      mockNotificationChannels.push(...data);
+      return Promise.resolve({ count: data.length });
+    }),
     deleteMany: jest.fn(({ where }: { where: { notificationId: string } }) => {
       let count = 0;
-      for (let index = mockNotificationChannels.length - 1; index >= 0; index -= 1) {
-        if (mockNotificationChannels[index].notificationId === where.notificationId) {
+      for (
+        let index = mockNotificationChannels.length - 1;
+        index >= 0;
+        index -= 1
+      ) {
+        if (
+          mockNotificationChannels[index].notificationId ===
+          where.notificationId
+        ) {
           mockNotificationChannels.splice(index, 1);
           count += 1;
         }
@@ -339,16 +510,25 @@ const mockPrismaClient = {
         };
       }) => {
         const count = mockNotificationChannels.filter((relation) => {
-          if (where.notificationId && relation.notificationId !== where.notificationId) {
+          if (
+            where.notificationId &&
+            relation.notificationId !== where.notificationId
+          ) {
             return false;
           }
           if (where.channel) {
             const channel = mockChannels.get(relation.channelId);
             if (!channel) return false;
-            if (where.channel.userId && channel.userId !== where.channel.userId) {
+            if (
+              where.channel.userId &&
+              channel.userId !== where.channel.userId
+            ) {
               return false;
             }
-            if (where.channel.status && channel.status !== where.channel.status) {
+            if (
+              where.channel.status &&
+              channel.status !== where.channel.status
+            ) {
               return false;
             }
           }
@@ -358,8 +538,25 @@ const mockPrismaClient = {
       },
     ),
   },
-  $transaction: jest.fn(async (callback: (tx: typeof mockPrismaClient) => unknown) =>
-    callback(mockPrismaClient),
+  userSettings: {
+    findUnique: jest.fn().mockResolvedValue(null),
+    update: jest.fn(({ data }: { data: Record<string, unknown> }) => {
+      return Promise.resolve({
+        userId: 'mock-user-id',
+        aiBaseUrl: null,
+        aiApiKeyEncrypted: null,
+        aiModel: null,
+        afternoonTime: null,
+        eveningTime: null,
+        tomorrowMorningTime: null,
+        allowHighFrequencyScheduling: null,
+        ...data,
+      });
+    }),
+  },
+  $transaction: jest.fn(
+    async (callback: (tx: typeof mockPrismaClient) => unknown) =>
+      callback(mockPrismaClient),
   ),
   $connect: jest.fn(),
   $disconnect: jest.fn(),
@@ -371,7 +568,9 @@ jest.mock('../src/shared/prisma/prisma.service', () => ({
 
 describe('Notifications (e2e)', () => {
   let app: INestApplication;
+  let notificationsService: NotificationsService;
   let schedulerService: NotificationSchedulerService;
+  let driverRegistry: ChannelDriverRegistry;
 
   const registerAndLogin = async (username: string) => {
     await request(app.getHttpServer())
@@ -385,7 +584,9 @@ describe('Notifications (e2e)', () => {
     return loginRes.body.data.token as string;
   };
 
-  const createChannel = (input: Partial<MockChannel> & { userId: string; name: string }) => {
+  const createChannel = (
+    input: Partial<MockChannel> & { userId: string; name: string },
+  ) => {
     const channel: MockChannel = {
       id: input.id ?? randomUUID(),
       userId: input.userId,
@@ -419,7 +620,10 @@ describe('Notifications (e2e)', () => {
     app.useGlobalInterceptors(new TransformInterceptor());
     app.useGlobalFilters(new AllExceptionsFilter());
     await app.init();
+    notificationsService = moduleFixture.get(NotificationsService);
     schedulerService = moduleFixture.get(NotificationSchedulerService);
+    driverRegistry = moduleFixture.get(ChannelDriverRegistry);
+    schedulerService.onModuleDestroy();
   });
 
   afterAll(async () => {
@@ -427,11 +631,20 @@ describe('Notifications (e2e)', () => {
   });
 
   beforeEach(() => {
+    jest.restoreAllMocks();
     mockUsers.clear();
     mockChannels.clear();
     mockNotifications.clear();
     mockNotificationChannels.length = 0;
+    mockPushRecords.length = 0;
     jest.clearAllMocks();
+    jest
+      .mocked(mockPrismaClient.userSettings.findUnique)
+      .mockResolvedValue(null);
+    jest.spyOn(driverRegistry, 'getDriver').mockReturnValue({
+      type: 'feishu_webhook',
+      send: jest.fn().mockResolvedValue({ success: true }),
+    });
   });
 
   it('returns 401 without login', async () => {
@@ -475,7 +688,9 @@ describe('Notifications (e2e)', () => {
     });
 
     const listRes = await request(app.getHttpServer())
-      .get('/notifications?keyword=库存&triggerType=webhook&status=active&page=1&pageSize=10')
+      .get(
+        '/notifications?keyword=库存&triggerType=webhook&status=active&page=1&pageSize=10',
+      )
       .set('Authorization', `Bearer ${token}`);
 
     expect(listRes.body).toMatchObject({
@@ -504,7 +719,11 @@ describe('Notifications (e2e)', () => {
       (item) => item.username === 'notice-owner',
     )?.id as string;
     const channelA = createChannel({ userId: ownerId, name: '飞书告警' });
-    const channelB = createChannel({ userId: ownerId, name: '企业微信告警', type: 'wecom_webhook' });
+    const channelB = createChannel({
+      userId: ownerId,
+      name: '企业微信告警',
+      type: 'wecom_webhook',
+    });
 
     const createRes = await request(app.getHttpServer())
       .post('/notifications')
@@ -614,7 +833,60 @@ describe('Notifications (e2e)', () => {
     });
   });
 
-  it('reactivates blocked notification and clears stopReason', async () => {
+  it('clears nextTriggerAt when disabling notification and recalculates it when enabling again', async () => {
+    const token = await registerAndLogin('toggle-next-trigger-user');
+    const userId = Array.from(mockUsers.values()).find(
+      (item) => item.username === 'toggle-next-trigger-user',
+    )?.id as string;
+    const channel = createChannel({ userId, name: '启停测试渠道' });
+
+    const createRes = await request(app.getHttpServer())
+      .post('/notifications')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: '启停测试',
+        title: '启停标题',
+        content: '启停内容',
+        triggerType: 'once',
+        triggerConfig: { executeAt: '2026-03-29T08:00:00.000Z' },
+        channelIds: [channel.id],
+      });
+
+    const notificationId = createRes.body.data.id as string;
+
+    const disableRes = await request(app.getHttpServer())
+      .patch(`/notifications/${notificationId}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'disabled' });
+
+    expect(disableRes.body).toEqual({
+      code: 200,
+      data: expect.objectContaining({
+        id: notificationId,
+        status: 'disabled',
+        nextTriggerAt: null,
+      }),
+      message: 'ok',
+    });
+
+    const enableRes = await request(app.getHttpServer())
+      .patch(`/notifications/${notificationId}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'active' });
+
+    expect(enableRes.body).toEqual({
+      code: 200,
+      data: expect.objectContaining({
+        id: notificationId,
+        status: 'active',
+        nextTriggerAt: '2026-03-29T08:00:00.000Z',
+        stopReason: null,
+      }),
+      message: 'ok',
+    });
+  });
+
+  it('reactivates blocked notification and recalculates nextTriggerAt', async () => {
     const token = await registerAndLogin('reactivate-notify');
     const userId = Array.from(mockUsers.values()).find(
       (item) => item.username === 'reactivate-notify',
@@ -628,8 +900,8 @@ describe('Notifications (e2e)', () => {
         name: '恢复测试',
         title: '恢复标题',
         content: '恢复内容',
-        triggerType: 'webhook',
-        triggerConfig: {},
+        triggerType: 'once',
+        triggerConfig: { executeAt: '2026-03-29T08:00:00.000Z' },
         channelIds: [channel.id],
       });
 
@@ -637,6 +909,7 @@ describe('Notifications (e2e)', () => {
     mockNotifications.set(notificationId, {
       ...(mockNotifications.get(notificationId) as MockNotification),
       status: 'blocked_no_channel',
+      nextTriggerAt: null,
       stopReason: '无可用渠道',
     });
 
@@ -651,6 +924,7 @@ describe('Notifications (e2e)', () => {
         id: notificationId,
         status: 'active',
         stopReason: null,
+        nextTriggerAt: '2026-03-29T08:00:00.000Z',
       }),
       message: 'ok',
     });
@@ -775,7 +1049,7 @@ describe('Notifications (e2e)', () => {
     expect(detailRes.body.data.webhookTokenHash).toBeUndefined();
 
     const resetRes = await request(app.getHttpServer())
-      .post(`/notifications/${notificationId}/webhook-token/reset`)
+      .post(`/notifications/${notificationId}/reset-webhook-token`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(resetRes.body).toMatchObject({
@@ -789,7 +1063,9 @@ describe('Notifications (e2e)', () => {
     const resetWebhookToken = resetRes.body.data.webhookToken as string;
     expect(resetWebhookToken).not.toBe(initialWebhookToken);
 
-    const invalidRes = await request(app.getHttpServer()).post('/open/webhook/notify/invalid-token');
+    const invalidRes = await request(app.getHttpServer()).post(
+      '/open/webhook/notify/invalid-token',
+    );
 
     expect(invalidRes.body).toEqual({
       code: 404,
@@ -826,7 +1102,7 @@ describe('Notifications (e2e)', () => {
     });
   });
 
-  it('scans due notifications through scheduler service and advances statuses', async () => {
+  it('scans due notifications through scheduler service and advances recurring cron', async () => {
     const token = await registerAndLogin('scheduler-user');
     const userId = Array.from(mockUsers.values()).find(
       (item) => item.username === 'scheduler-user',
@@ -841,7 +1117,7 @@ describe('Notifications (e2e)', () => {
         title: '一次性标题',
         content: '一次性内容',
         triggerType: 'once',
-        triggerConfig: { executeAt: '2026-03-29T08:00:00.000Z' },
+        triggerConfig: { executeAt: '2026-03-29T09:00:10.000Z' },
         channelIds: [channel.id],
       });
     const recurringRes = await request(app.getHttpServer())
@@ -852,7 +1128,7 @@ describe('Notifications (e2e)', () => {
         title: '周期标题',
         content: '周期内容',
         triggerType: 'recurring',
-        triggerConfig: { cron: '0 9 * * *' },
+        triggerConfig: { cron: '0 */5 * * * *' },
         channelIds: [channel.id],
       });
     const futureRes = await request(app.getHttpServer())
@@ -882,30 +1158,358 @@ describe('Notifications (e2e)', () => {
     const recurringId = recurringRes.body.data.id as string;
     const futureId = futureRes.body.data.id as string;
     const webhookId = webhookRes.body.data.id as string;
+    const dueAt = new Date('2026-03-29T09:00:10.000Z');
 
     mockNotifications.set(recurringId, {
       ...(mockNotifications.get(recurringId) as MockNotification),
-      nextTriggerAt: new Date('2026-03-29T09:00:00.000Z'),
+      nextTriggerAt: dueAt,
     });
 
-    const originalRecurringNextTriggerAt = new Date(
-      (mockNotifications.get(recurringId) as MockNotification).nextTriggerAt as Date,
-    );
+    const nextTriggerSpy = jest
+      .spyOn(
+        notificationsService as unknown as {
+          calculateRecurringNextTriggerAt: (cron: string) => Date;
+        },
+        'calculateRecurringNextTriggerAt',
+      )
+      .mockReturnValue(new Date('2026-03-29T09:05:00.000Z'));
 
-    const result = await schedulerService.scanDueNotifications(new Date('2026-03-29T09:00:00.000Z'));
+    const pushRecordCreateSpy = jest.mocked(mockPrismaClient.pushRecord.create);
+    pushRecordCreateSpy.mockClear();
+
+    const result = await schedulerService.scanDueNotifications(dueAt);
 
     expect(result).toEqual({ processedCount: 2 });
-    expect((mockNotifications.get(onceId) as MockNotification).status).toBe('completed');
-    expect((mockNotifications.get(onceId) as MockNotification).nextTriggerAt).toBeNull();
-    expect((mockNotifications.get(recurringId) as MockNotification).status).toBe('active');
-    expect((mockNotifications.get(recurringId) as MockNotification).nextTriggerAt?.getTime()).toBeGreaterThan(
-      originalRecurringNextTriggerAt.getTime(),
+    expect(pushRecordCreateSpy).toHaveBeenCalledTimes(2);
+    expect(pushRecordCreateSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          notificationId: onceId,
+          source: 'scheduler',
+          result: 'success',
+        }),
+      }),
     );
-    expect((mockNotifications.get(futureId) as MockNotification).status).toBe('active');
-    expect((mockNotifications.get(webhookId) as MockNotification).status).toBe('active');
+    expect(pushRecordCreateSpy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          notificationId: recurringId,
+          source: 'scheduler',
+          result: 'success',
+        }),
+      }),
+    );
+    expect((mockNotifications.get(onceId) as MockNotification).status).toBe(
+      'completed',
+    );
+    expect(
+      (mockNotifications.get(onceId) as MockNotification).nextTriggerAt,
+    ).toBeNull();
+    expect(
+      (mockNotifications.get(recurringId) as MockNotification).status,
+    ).toBe('active');
+    expect(
+      (
+        mockNotifications.get(recurringId) as MockNotification
+      ).nextTriggerAt?.toISOString(),
+    ).toBe('2026-03-29T09:05:00.000Z');
+    expect((mockNotifications.get(futureId) as MockNotification).status).toBe(
+      'active',
+    );
+    expect((mockNotifications.get(webhookId) as MockNotification).status).toBe(
+      'active',
+    );
   });
 
-  it('returns 400 for invalid dto', async () => {
+  it('creates recurring notification with 6-part cron and preserves cron in response', async () => {
+    const token = await registerAndLogin('cron-6-part-user');
+    const userId = Array.from(mockUsers.values()).find(
+      (item) => item.username === 'cron-6-part-user',
+    )?.id as string;
+    const channel = createChannel({ userId, name: '秒级提醒渠道' });
+
+    const response = await request(app.getHttpServer())
+      .post('/notifications')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: '秒级周期提醒',
+        title: '秒级标题',
+        content: '秒级内容',
+        triggerType: 'recurring',
+        triggerConfig: { cron: '0 */5 * * * *' },
+        channelIds: [channel.id],
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.triggerType).toBe('recurring');
+    expect(response.body.data.triggerConfig).toEqual({ cron: '0 */5 * * * *' });
+    expect(response.body.data.nextTriggerAt).toBeTruthy();
+  });
+
+  it('rejects invalid 6-part cron when creating recurring notification', async () => {
+    const token = await registerAndLogin('cron-invalid-user');
+    const userId = Array.from(mockUsers.values()).find(
+      (item) => item.username === 'cron-invalid-user',
+    )?.id as string;
+    const channel = createChannel({ userId, name: '非法 cron 渠道' });
+
+    const response = await request(app.getHttpServer())
+      .post('/notifications')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: '非法秒级周期提醒',
+        title: '非法标题',
+        content: '非法内容',
+        triggerType: 'recurring',
+        triggerConfig: { cron: '60 * * * * *' },
+        channelIds: [channel.id],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe('Cron 表达式不合法');
+  });
+
+  it('rejects high-frequency 6-part cron when creating recurring notification', async () => {
+    const token = await registerAndLogin('cron-too-frequent-user');
+    const userId = Array.from(mockUsers.values()).find(
+      (item) => item.username === 'cron-too-frequent-user',
+    )?.id as string;
+    const channel = createChannel({ userId, name: '高频 cron 渠道' });
+
+    const response = await request(app.getHttpServer())
+      .post('/notifications')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: '高频周期提醒',
+        title: '高频标题',
+        content: '高频内容',
+        triggerType: 'recurring',
+        triggerConfig: { cron: '*/10 * * * * *' },
+        channelIds: [channel.id],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe('Cron 执行频率不能高于每 5 分钟一次');
+  });
+
+  it('updates recurring notification to 6-part cron', async () => {
+    const token = await registerAndLogin('cron-update-user');
+    const userId = Array.from(mockUsers.values()).find(
+      (item) => item.username === 'cron-update-user',
+    )?.id as string;
+    const channel = createChannel({ userId, name: '更新 cron 渠道' });
+
+    const created = await request(app.getHttpServer())
+      .post('/notifications')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: '待更新周期提醒',
+        title: '原始标题',
+        content: '原始内容',
+        triggerType: 'recurring',
+        triggerConfig: { cron: '0 9 * * *' },
+        channelIds: [channel.id],
+      });
+
+    const notificationId = created.body.data.id as string;
+    const response = await request(app.getHttpServer())
+      .patch(`/notifications/${notificationId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        triggerType: 'recurring',
+        triggerConfig: { cron: '0 */5 * * * *' },
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.triggerConfig).toEqual({
+      cron: '0 */5 * * * *',
+    });
+    expect(response.body.data.nextTriggerAt).toBeTruthy();
+  });
+
+  it('rejects high-frequency 6-part cron when updating recurring notification', async () => {
+    const token = await registerAndLogin('cron-update-too-frequent-user');
+    const userId = Array.from(mockUsers.values()).find(
+      (item) => item.username === 'cron-update-too-frequent-user',
+    )?.id as string;
+    const channel = createChannel({ userId, name: '更新高频 cron 渠道' });
+
+    const created = await request(app.getHttpServer())
+      .post('/notifications')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: '待更新高频周期提醒',
+        title: '原始标题',
+        content: '原始内容',
+        triggerType: 'recurring',
+        triggerConfig: { cron: '0 9 * * *' },
+        channelIds: [channel.id],
+      });
+
+    const notificationId = created.body.data.id as string;
+    const response = await request(app.getHttpServer())
+      .patch(`/notifications/${notificationId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        triggerType: 'recurring',
+        triggerConfig: { cron: '*/10 * * * * *' },
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe('Cron 执行频率不能高于每 5 分钟一次');
+  });
+
+  it('allows high-frequency 6-part cron when creating recurring notification and setting allows high-frequency scheduling', async () => {
+    const token = await registerAndLogin('hf-create-user');
+    const userId = Array.from(mockUsers.values()).find(
+      (item) => item.username === 'hf-create-user',
+    )?.id as string;
+    const channel = createChannel({ userId, name: '高频允许渠道' });
+
+    jest
+      .mocked(mockPrismaClient.userSettings.findUnique)
+      .mockResolvedValueOnce({ allowHighFrequencyScheduling: true });
+
+    const response = await request(app.getHttpServer())
+      .post('/notifications')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: '高频允许提醒',
+        title: '高频标题',
+        content: '高频内容',
+        triggerType: 'recurring',
+        triggerConfig: { cron: '*/10 * * * * *' },
+        channelIds: [channel.id],
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.triggerConfig).toEqual({
+      cron: '*/10 * * * * *',
+    });
+    expect(response.body.data.nextTriggerAt).toBeTruthy();
+  });
+
+  it('allows high-frequency 6-part cron when updating recurring notification and setting allows high-frequency scheduling', async () => {
+    const token = await registerAndLogin('hf-update-user');
+    const userId = Array.from(mockUsers.values()).find(
+      (item) => item.username === 'hf-update-user',
+    )?.id as string;
+    const channel = createChannel({ userId, name: '高频更新渠道' });
+
+    const created = await request(app.getHttpServer())
+      .post('/notifications')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: '待更新周期提醒',
+        title: '原始标题',
+        content: '原始内容',
+        triggerType: 'recurring',
+        triggerConfig: { cron: '0 9 * * *' },
+        channelIds: [channel.id],
+      });
+
+    const notificationId = created.body.data.id as string;
+
+    jest
+      .mocked(mockPrismaClient.userSettings.findUnique)
+      .mockResolvedValueOnce({ allowHighFrequencyScheduling: true });
+
+    const response = await request(app.getHttpServer())
+      .patch(`/notifications/${notificationId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        triggerType: 'recurring',
+        triggerConfig: { cron: '*/10 * * * * *' },
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.triggerConfig).toEqual({
+      cron: '*/10 * * * * *',
+    });
+    expect(response.body.data.nextTriggerAt).toBeTruthy();
+  });
+
+  it('rejects high-frequency 6-part cron when settings explicitly disallow high-frequency scheduling', async () => {
+    const token = await registerAndLogin('hf-disallow-user');
+    const userId = Array.from(mockUsers.values()).find(
+      (item) => item.username === 'hf-disallow-user',
+    )?.id as string;
+    const channel = createChannel({ userId, name: '高频拒绝渠道' });
+
+    jest
+      .mocked(mockPrismaClient.userSettings.findUnique)
+      .mockResolvedValueOnce({ allowHighFrequencyScheduling: false });
+
+    const response = await request(app.getHttpServer())
+      .post('/notifications')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: '高频拒绝提醒',
+        title: '高频标题',
+        content: '高频内容',
+        triggerType: 'recurring',
+        triggerConfig: { cron: '*/10 * * * * *' },
+        channelIds: [channel.id],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe('Cron 执行频率不能高于每 5 分钟一次');
+  });
+
+  it('allows enabling notification with high-frequency recurring cron when setting allows high-frequency scheduling', async () => {
+    const token = await registerAndLogin('hf-enable-user');
+    const userId = Array.from(mockUsers.values()).find(
+      (item) => item.username === 'hf-enable-user',
+    )?.id as string;
+    const channel = createChannel({ userId, name: '高频启用渠道' });
+
+    // Create with a non-high-frequency cron first (allowed by default)
+    const created = await request(app.getHttpServer())
+      .post('/notifications')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: '高频待启用提醒',
+        title: '高频标题',
+        content: '高频内容',
+        triggerType: 'recurring',
+        triggerConfig: { cron: '0 9 * * *' },
+        channelIds: [channel.id],
+      });
+
+    expect(created.body.data.status).toBe('active');
+
+    await request(app.getHttpServer())
+      .patch(`/notifications/${created.body.data.id}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'disabled' });
+
+    // Mock persists for the remainder of this test
+    jest
+      .mocked(mockPrismaClient.userSettings.findUnique)
+      .mockResolvedValue({ allowHighFrequencyScheduling: true });
+
+    // Update cron to high-frequency while disabled
+    await request(app.getHttpServer())
+      .patch(`/notifications/${created.body.data.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        triggerType: 'recurring',
+        triggerConfig: { cron: '*/10 * * * * *' },
+      });
+
+    // Re-enable: ensureRecurringCronAllowed is called and passes with setting=true
+    const enableRes = await request(app.getHttpServer())
+      .patch(`/notifications/${created.body.data.id}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'active' });
+
+    expect(enableRes.status).toBe(200);
+    expect(enableRes.body.data.status).toBe('active');
+  });
+
+  it('rejects invalid payload when creating notification', async () => {
     const token = await registerAndLogin('invalid-notify');
 
     const res = await request(app.getHttpServer())

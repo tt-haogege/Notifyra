@@ -24,10 +24,16 @@ export class RecordsService {
       where.source = query.source;
     }
     if (query.startDate) {
-      where.pushedAt = { ...((where.pushedAt as object) || {}), gte: new Date(query.startDate) };
+      where.pushedAt = {
+        ...((where.pushedAt as object) || {}),
+        gte: new Date(query.startDate),
+      };
     }
     if (query.endDate) {
-      where.pushedAt = { ...((where.pushedAt as object) || {}), lte: new Date(query.endDate) };
+      where.pushedAt = {
+        ...((where.pushedAt as object) || {}),
+        lte: new Date(query.endDate),
+      };
     }
 
     const [items, total] = await Promise.all([
@@ -57,7 +63,7 @@ export class RecordsService {
         title: item.titleSnapshot,
         content: item.contentSnapshot,
         source: item.source,
-        status: item.result as 'success' | 'failed' | 'pending',
+        status: item.result as 'success' | 'partial' | 'failure',
         errorSummary: item.errorSummary,
         pushedAt: item.pushedAt,
         createdAt: item.createdAt,
@@ -74,7 +80,9 @@ export class RecordsService {
       where: { id, userId },
       include: {
         channel: { select: { id: true, name: true, type: true } },
-        notification: { select: { id: true, name: true, title: true, content: true } },
+        notification: {
+          select: { id: true, name: true, title: true, content: true },
+        },
         channelResults: true,
         webhookLog: true,
       },
@@ -94,34 +102,37 @@ export class RecordsService {
       title: record.titleSnapshot,
       content: record.contentSnapshot,
       source: record.source,
-      status: record.result as 'success' | 'failed' | 'pending',
+      status: record.result as 'success' | 'partial' | 'failure',
       errorMessage: record.errorSummary,
       pushedAt: record.pushedAt,
       createdAt: record.createdAt,
       channelResults: record.channelResults,
-      webhookLog: record.webhookLog ? {
-        sourceIp: record.webhookLog.sourceIp,
-        requestBodyJson: record.webhookLog.requestBodyJson,
-        requestedAt: record.webhookLog.requestedAt,
-      } : null,
+      webhookLog: record.webhookLog
+        ? {
+            sourceIp: record.webhookLog.sourceIp,
+            requestBodyJson: record.webhookLog.requestBodyJson,
+            requestedAt: record.webhookLog.requestedAt,
+          }
+        : null,
     };
   }
 
   async getStats(userId: string) {
-    const [total, successCount, failureCount, recentRecords] = await Promise.all([
-      this.prisma.pushRecord.count({ where: { userId } }),
-      this.prisma.pushRecord.count({ where: { userId, result: 'success' } }),
-      this.prisma.pushRecord.count({ where: { userId, result: 'failed' } }),
-      this.prisma.pushRecord.findMany({
-        where: { userId },
-        orderBy: { pushedAt: 'desc' },
-        take: 5,
-        include: {
-          channel: { select: { id: true, name: true, type: true } },
-          notification: { select: { id: true, name: true } },
-        },
-      }),
-    ]);
+    const [total, successCount, failureCount, recentRecords] =
+      await Promise.all([
+        this.prisma.pushRecord.count({ where: { userId } }),
+        this.prisma.pushRecord.count({ where: { userId, result: 'success' } }),
+        this.prisma.pushRecord.count({ where: { userId, result: 'failure' } }),
+        this.prisma.pushRecord.findMany({
+          where: { userId },
+          orderBy: { pushedAt: 'desc' },
+          take: 5,
+          include: {
+            channel: { select: { id: true, name: true, type: true } },
+            notification: { select: { id: true, name: true } },
+          },
+        }),
+      ]);
 
     return {
       total,

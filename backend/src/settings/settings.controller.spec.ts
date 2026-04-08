@@ -31,12 +31,14 @@ describe('SettingsController', () => {
         afternoonTime: '14:00',
         eveningTime: '20:00',
         tomorrowMorningTime: '08:00',
+        allowHighFrequencyScheduling: true,
       });
 
       const result = await controller.get({ userId: 'user-1' });
 
       expect(result.aiBaseUrl).toBe('https://api.openai.com');
       expect(result.afternoonTime).toBe('14:00');
+      expect(result.allowHighFrequencyScheduling).toBe(true);
     });
 
     it('returns defaults when no settings exist', async () => {
@@ -46,11 +48,13 @@ describe('SettingsController', () => {
         afternoonTime: null,
         eveningTime: null,
         tomorrowMorningTime: null,
+        allowHighFrequencyScheduling: false,
       });
 
       const result = await controller.get({ userId: 'user-1' });
 
       expect(result.aiBaseUrl).toBeNull();
+      expect(result.allowHighFrequencyScheduling).toBe(false);
     });
   });
 
@@ -62,17 +66,23 @@ describe('SettingsController', () => {
         afternoonTime: null,
         eveningTime: null,
         tomorrowMorningTime: null,
+        allowHighFrequencyScheduling: true,
       });
 
       const result = await controller.update(
         { userId: 'user-1' },
-        { aiBaseUrl: 'https://api.openai.com', aiModel: 'gpt-4o' },
+        {
+          aiBaseUrl: 'https://api.openai.com',
+          aiModel: 'gpt-4o',
+          allowHighFrequencyScheduling: true,
+        },
       );
 
       expect(result.aiModel).toBe('gpt-4o');
       expect(mockSettingsService.update).toHaveBeenCalledWith('user-1', {
         aiBaseUrl: 'https://api.openai.com',
         aiModel: 'gpt-4o',
+        allowHighFrequencyScheduling: true,
       });
     });
 
@@ -83,16 +93,28 @@ describe('SettingsController', () => {
         afternoonTime: '15:00',
         eveningTime: '21:00',
         tomorrowMorningTime: '09:00',
+        allowHighFrequencyScheduling: true,
       });
 
       const result = await controller.update(
         { userId: 'user-1' },
-        { afternoonTime: '15:00', eveningTime: '21:00', tomorrowMorningTime: '09:00' },
+        {
+          afternoonTime: '15:00',
+          eveningTime: '21:00',
+          tomorrowMorningTime: '09:00',
+          allowHighFrequencyScheduling: true,
+        },
       );
 
       expect(result.afternoonTime).toBe('15:00');
       expect(result.eveningTime).toBe('21:00');
       expect(result.tomorrowMorningTime).toBe('09:00');
+      expect(mockSettingsService.update).toHaveBeenCalledWith('user-1', {
+        afternoonTime: '15:00',
+        eveningTime: '21:00',
+        tomorrowMorningTime: '09:00',
+        allowHighFrequencyScheduling: true,
+      });
     });
   });
 });

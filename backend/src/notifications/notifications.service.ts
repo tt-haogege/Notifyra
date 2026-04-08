@@ -1,7 +1,13 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { parseExpression } from 'cron-parser';
 import { randomBytes } from 'crypto';
 import { Job, scheduleJob } from 'node-schedule';
+import { z } from 'zod';
 import { PrismaService } from '../shared/prisma/prisma.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { ListNotificationsQueryDto } from './dto/list-notifications.query.dto';
@@ -9,6 +15,22 @@ import { UpdateNotificationDto } from './dto/update-notification.dto';
 import { UpdateNotificationStatusDto } from './dto/update-notification-status.dto';
 
 type TriggerType = 'once' | 'recurring' | 'webhook';
+
+const CRON_PART_PATTERN = /^([\d*/,-]+)$/;
+const MIN_RECURRING_CRON_INTERVAL_MS = 5 * 60 * 1000;
+const MIN_RECURRING_CRON_INTERVAL_MESSAGE =
+  'Cron 执行频率不能高于每 5 分钟一次';
+const cronExpressionSchema = z
+  .string()
+  .trim()
+  .refine((value) => {
+    const parts = value.split(/\s+/);
+    return parts.length === 5 || parts.length === 6;
+  }, 'Cron 表达式不合法')
+  .refine(
+    (value) => value.split(/\s+/).every((part) => CRON_PART_PATTERN.test(part)),
+    'Cron 表达式不合法',
+  );
 
 type TriggerConfig = Record<string, unknown>;
 
@@ -19,10 +41,21 @@ export class NotificationsService {
   async create(userId: string, dto: CreateNotificationDto) {
     this.ensureUniqueChannelIds(dto.channelIds);
     const channels = await this.ensureOwnedChannels(userId, dto.channelIds);
-    const triggerConfig = this.validateTriggerConfig(dto.triggerType, dto.triggerConfig);
-    const nextTriggerAt = this.calculateNextTriggerAt(dto.triggerType, triggerConfig);
-    const webhookToken = dto.triggerType === 'webhook' ? this.generateToken() : undefined;
-    const webhookTokenHash = webhookToken ? await bcrypt.hash(webhookToken, 10) : undefined;
+    const triggerConfig = await this.validateTriggerConfig(
+      userId,
+      dto.triggerType,
+      dto.triggerConfig,
+    );
+    const nextTriggerAt = await this.calculateNextTriggerAt(
+      userId,
+      dto.triggerType,
+      triggerConfig,
+    );
+    const webhookToken =
+      dto.triggerType === 'webhook' ? this.generateToken() : undefined;
+    const webhookTokenHash = webhookToken
+      ? await bcrypt.hash(webhookToken, 10)
+      : undefined;
 
     const notification = await this.prisma.$transaction(async (tx) => {
       const created = await tx.notification.create({
@@ -89,7 +122,9 @@ export class NotificationsService {
         orderBy: { updatedAt: 'desc' },
         include: {
           channels: {
-            include: { channel: { select: { id: true, name: true, type: true } } },
+            include: {
+              channel: { select: { id: true, name: true, type: true } },
+            },
           },
           pushRecords: {
             orderBy: { pushedAt: 'desc' },
@@ -116,7 +151,13 @@ export class NotificationsService {
         boundChannelCount: item.channels.length,
         channels: item.channels.map((nc) => nc.channel),
         lastPushResult: item.pushRecords[0]
-          ? { status: item.pushRecords[0].result as 'success' | 'failed' | 'pending', pushedAt: item.pushRecords[0].pushedAt }
+          ? {
+              status: item.pushRecords[0].result as
+                | 'success'
+                | 'partial'
+                | 'failure',
+              pushedAt: item.pushRecords[0].pushedAt,
+            }
           : null,
       })),
       page,
@@ -211,10 +252,13 @@ export class NotificationsService {
 
   async update(userId: string, id: string, dto: UpdateNotificationDto) {
     const current = await this.ensureNotificationExists(userId, id);
-    const nextTriggerType = dto.triggerType ?? (current.triggerType as TriggerType);
-    const nextTriggerConfig = this.validateTriggerConfig(
+    const nextTriggerType =
+      dto.triggerType ?? (current.triggerType as TriggerType);
+    const nextTriggerConfig = await this.validateTriggerConfig(
+      userId,
       nextTriggerType,
       dto.triggerConfig ?? this.parseTriggerConfig(current.triggerJson),
+      current.status !== 'active',
     );
     const shouldReplaceChannels = dto.channelIds !== undefined;
     const nextChannelIds = dto.channelIds ?? [];
@@ -236,9 +280,19 @@ export class NotificationsService {
           ...(dto.name !== undefined ? { name: dto.name } : {}),
           ...(dto.title !== undefined ? { title: dto.title } : {}),
           ...(dto.content !== undefined ? { content: dto.content } : {}),
-          ...(dto.triggerType !== undefined ? { triggerType: dto.triggerType } : {}),
+          ...(dto.triggerType !== undefined
+            ? { triggerType: dto.triggerType }
+            : {}),
           triggerJson: this.serializeTriggerConfig(nextTriggerConfig),
-          nextTriggerAt: this.calculateNextTriggerAt(nextTriggerType, nextTriggerConfig),
+          ...(current.status === 'active'
+            ? {
+                nextTriggerAt: await this.calculateNextTriggerAt(
+                  userId,
+                  nextTriggerType,
+                  nextTriggerConfig,
+                ),
+              }
+            : { nextTriggerAt: null }),
           ...(dto.note !== undefined ? { note: dto.note } : {}),
           ...(webhookTokenHash ? { webhookTokenHash } : {}),
         },
@@ -278,22 +332,45 @@ export class NotificationsService {
     };
   }
 
-  async updateStatus(userId: string, id: string, dto: UpdateNotificationStatusDto) {
+  async updateStatus(
+    userId: string,
+    id: string,
+    dto: UpdateNotificationStatusDto,
+  ) {
     const notification = await this.ensureNotificationExists(userId, id);
 
     if (notification.status === 'completed') {
       throw new BadRequestException('已完成通知不支持手动修改状态');
     }
 
-    if (dto.status === 'active') {
+    const isActivating = dto.status === 'active';
+
+    if (isActivating) {
       await this.ensureCanEnable(userId, id);
+    }
+
+    const triggerType = notification.triggerType as TriggerType;
+    const triggerConfig = this.parseTriggerConfig(notification.triggerJson);
+
+    if (isActivating && triggerType === 'recurring') {
+      await this.ensureRecurringCronAllowed(
+        userId,
+        this.normalizeCronExpression(triggerConfig.cron as string),
+      );
     }
 
     return this.prisma.notification.update({
       where: { id },
       data: {
         status: dto.status,
-        ...(dto.status === 'active' ? { stopReason: null } : {}),
+        nextTriggerAt: isActivating
+          ? await this.calculateNextTriggerAt(
+              userId,
+              triggerType,
+              triggerConfig,
+            )
+          : null,
+        ...(isActivating ? { stopReason: null } : {}),
       },
     });
   }
@@ -378,7 +455,9 @@ export class NotificationsService {
     return this.prisma.notification.update({
       where: { id, status: 'active', triggerType: 'recurring' },
       data: {
-        nextTriggerAt: this.calculateRecurringNextTriggerAt(triggerConfig.cron as string),
+        nextTriggerAt: this.calculateRecurringNextTriggerAt(
+          triggerConfig.cron as string,
+        ),
       },
     });
   }
@@ -414,7 +493,10 @@ export class NotificationsService {
     for (const notification of notifications) {
       if (!notification.webhookTokenHash) continue;
 
-      const matched = await this.isWebhookTokenMatched(token, notification.webhookTokenHash);
+      const matched = await this.isWebhookTokenMatched(
+        token,
+        notification.webhookTokenHash,
+      );
       if (!matched) continue;
       if (notification.status !== 'active') {
         throw new BadRequestException('通知未启用');
@@ -477,14 +559,22 @@ export class NotificationsService {
     }
   }
 
-  private validateTriggerConfig(triggerType: TriggerType, triggerConfig: Record<string, unknown>) {
+  private async validateTriggerConfig(
+    userId: string,
+    triggerType: TriggerType,
+    triggerConfig: Record<string, unknown>,
+    skipFrequencyCheck = false,
+  ) {
     if (triggerType === 'webhook') {
       return {};
     }
 
     if (triggerType === 'once') {
       const executeAt = triggerConfig.executeAt;
-      if (typeof executeAt !== 'string' || Number.isNaN(Date.parse(executeAt))) {
+      if (
+        typeof executeAt !== 'string' ||
+        Number.isNaN(Date.parse(executeAt))
+      ) {
         throw new BadRequestException('一次性触发时间不合法');
       }
 
@@ -492,11 +582,16 @@ export class NotificationsService {
     }
 
     const cron = triggerConfig.cron;
-    if (typeof cron !== 'string' || !this.isValidCron(cron)) {
+    if (typeof cron !== 'string') {
       throw new BadRequestException('Cron 表达式不合法');
     }
 
-    return { cron };
+    const normalizedCron = this.normalizeCronExpression(cron);
+    if (!skipFrequencyCheck) {
+      await this.ensureRecurringCronAllowed(userId, normalizedCron);
+    }
+
+    return { cron: normalizedCron };
   }
 
   private serializeTriggerConfig(triggerConfig: TriggerConfig) {
@@ -507,7 +602,11 @@ export class NotificationsService {
     return JSON.parse(triggerJson) as Record<string, unknown>;
   }
 
-  private calculateNextTriggerAt(triggerType: TriggerType, triggerConfig: TriggerConfig) {
+  private async calculateNextTriggerAt(
+    userId: string,
+    triggerType: TriggerType,
+    triggerConfig: TriggerConfig,
+  ) {
     if (triggerType === 'webhook') {
       return null;
     }
@@ -535,20 +634,25 @@ export class NotificationsService {
     }
   }
 
-  private isValidCron(cron: string) {
-    const parts = cron.trim().split(/\s+/);
-    if (parts.length !== 5) return false;
+  private normalizeCronExpression(cron: string) {
+    const parsedCron = cronExpressionSchema.safeParse(cron);
+    if (!parsedCron.success) {
+      throw new BadRequestException('Cron 表达式不合法');
+    }
 
-    return parts.every((part) => /^([\d*/,-]+)$/.test(part));
+    return parsedCron.data;
   }
 
   private calculateRecurringNextTriggerAt(cron: string) {
     let job: Job | null = null;
 
     try {
-      job = scheduleJob(cron, () => undefined);
+      const normalizedCron = this.normalizeCronExpression(cron);
+      job = scheduleJob(normalizedCron, () => undefined);
       const nextInvocation = job?.nextInvocation();
-      const nextTriggerAt = nextInvocation ? new Date(nextInvocation.getTime()) : null;
+      const nextTriggerAt = nextInvocation
+        ? new Date(nextInvocation.getTime())
+        : null;
 
       if (!nextTriggerAt) {
         throw new BadRequestException('Cron 表达式不合法');
@@ -557,6 +661,36 @@ export class NotificationsService {
       return nextTriggerAt;
     } finally {
       job?.cancel();
+    }
+  }
+
+  private async ensureRecurringCronAllowed(userId: string, cron: string) {
+    const settings = await this.prisma.userSettings.findUnique({
+      where: { userId },
+    });
+
+    if (settings?.allowHighFrequencyScheduling) {
+      return;
+    }
+
+    this.ensureRecurringCronInterval(cron);
+  }
+
+  private ensureRecurringCronInterval(cron: string) {
+    try {
+      const interval = parseExpression(cron);
+      const first = interval.next().toDate();
+      const second = interval.next().toDate();
+
+      if (second.getTime() - first.getTime() < MIN_RECURRING_CRON_INTERVAL_MS) {
+        throw new BadRequestException(MIN_RECURRING_CRON_INTERVAL_MESSAGE);
+      }
+    } catch (error: unknown) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      throw new BadRequestException('Cron 表达式不合法');
     }
   }
 

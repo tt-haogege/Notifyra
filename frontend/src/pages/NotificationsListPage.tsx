@@ -62,7 +62,6 @@ export default function NotificationsListPage() {
         description="管理你的通知规则、状态、渠道与触发方式。"
         actions={
           <>
-            <Link className="ghost-button" to="/notifications/new?ai=1">AI 创建</Link>
             <Link className="primary-button" to="/notifications/new">新建通知</Link>
           </>
         }
@@ -98,6 +97,16 @@ export default function NotificationsListPage() {
               { value: 'webhook', label: 'Webhook' },
             ]}
           />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+            <button
+              className="icon-button"
+              type="button"
+              title="刷新"
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['notifications'] })}
+            >
+              ↻
+            </button>
+          </div>
         </div>
       </Card>
       <div className="table-card">
@@ -141,20 +150,26 @@ export default function NotificationsListPage() {
                 )}
               </div>
               <div>
-                <FakeSwitch
-                  checked={n.status === 'active'}
-                  onChange={(checked) =>
-                    toggleMutation.mutate({ id: n.id, status: checked ? 'active' : 'disabled' })
-                  }
-                />
+                {n.status === 'completed' ? (
+                  <StatusBadge tone="slate">已完成</StatusBadge>
+                ) : n.status === 'blocked_no_channel' ? (
+                  <StatusBadge tone="red">无渠道</StatusBadge>
+                ) : (
+                  <FakeSwitch
+                    checked={n.status === 'active'}
+                    onChange={(checked) =>
+                      toggleMutation.mutate({ id: n.id, status: checked ? 'active' : 'disabled' })
+                    }
+                  />
+                )}
               </div>
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
                 {n.nextTriggerAt ? new Date(n.nextTriggerAt).toLocaleString('zh-CN') : '-'}
               </div>
               <div>
                 {n.lastPushResult ? (
-                  <StatusBadge tone={n.lastPushResult.status === 'success' ? 'green' : n.lastPushResult.status === 'failed' ? 'red' : 'blue'}>
-                    {n.lastPushResult.status === 'success' ? '成功' : n.lastPushResult.status === 'failed' ? '失败' : '处理中'}
+                  <StatusBadge tone={n.lastPushResult.status === 'success' ? 'green' : n.lastPushResult.status === 'failure' ? 'red' : 'orange'}>
+                    {n.lastPushResult.status === 'success' ? '成功' : n.lastPushResult.status === 'failure' ? '失败' : '部分成功'}
                   </StatusBadge>
                 ) : (
                   <span className="muted-text">暂无</span>

@@ -1,7 +1,7 @@
 import client from './client';
 
 export type PushRecordSource = 'scheduler' | 'webhook' | 'test_notification' | 'channel_api';
-export type PushRecordStatus = 'success' | 'failed' | 'pending';
+export type PushRecordStatus = 'success' | 'partial' | 'failure';
 
 export interface ChannelPushResult {
   id: string;

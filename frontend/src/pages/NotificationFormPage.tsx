@@ -11,6 +11,8 @@ import { channelsApi } from '../api/channels';
 import { emitToast } from '../components/common/toast-events';
 import type { Notification } from '../api/notifications';
 
+const CRON_PART_PATTERN = /^([\d*/,-]+)$/;
+
 const padNumber = (value: number) => value.toString().padStart(2, '0');
 
 const formatDateValue = (date: Date) =>
@@ -44,6 +46,19 @@ const parseScheduleParts = (value: string) => {
 const buildScheduleAt = (date: string, hour: string, minute: string, second: string) => {
   if (!date || !hour || !minute || !second) return '';
   return `${date}T${hour}:${minute}:${second}`;
+};
+
+const normalizeCronExpression = (cron: string) => cron.trim();
+
+const isValidCronExpression = (cron: string) => {
+  const normalizedCron = normalizeCronExpression(cron);
+  const parts = normalizedCron.split(/\s+/);
+
+  if ((parts.length !== 5 && parts.length !== 6) || parts.some((part) => !CRON_PART_PATTERN.test(part))) {
+    return false;
+  }
+
+  return true;
 };
 
 const getDefaultNotificationDraft = (todayValue: string, sourceKey: string) => ({
@@ -151,7 +166,14 @@ export default function NotificationFormPage() {
       }
       triggerConfig.executeAt = executeAt;
     }
-    if (triggerType === 'recurring') triggerConfig.cron = cronExpression;
+    if (triggerType === 'recurring') {
+      const normalizedCron = normalizeCronExpression(cronExpression);
+      if (!isValidCronExpression(normalizedCron)) {
+        emitToast('Cron 表达式不合法', 'error');
+        return;
+      }
+      triggerConfig.cron = normalizedCron;
+    }
 
     const payload = { name, triggerType, title, content, channelIds: selectedChannels, triggerConfig };
     if (isEdit) updateMutation.mutate(payload);
@@ -223,9 +245,12 @@ export default function NotificationFormPage() {
                   }}
                 />
               ) : (
-                <div className="input-shell highlight stack-gap">
-                  <input className="full-width" value={cronExpression} onChange={(e) => setDraft((prev) => ({ ...prev, cronExpression: e.target.value }))} placeholder="0 * * * *" style={{ background: 'transparent', border: 'none', outline: 'none', color: 'inherit' }} />
-                </div>
+                <>
+                  <div className="input-shell highlight stack-gap">
+                    <input className="full-width" value={cronExpression} onChange={(e) => setDraft((prev) => ({ ...prev, cronExpression: e.target.value }))} placeholder="支持 5 位或 6 位 Cron" style={{ background: 'transparent', border: 'none', outline: 'none', color: 'inherit' }} />
+                  </div>
+                  <p className="helper-text">5 位：分 时 日 月 周；6 位：秒 分 时 日 月 周。</p>
+                </>
               )}
             </div>
           )}

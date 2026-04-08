@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../shared/prisma/prisma.service';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 
@@ -24,6 +25,7 @@ export class SettingsService {
       afternoonTime: settings.afternoonTime,
       eveningTime: settings.eveningTime,
       tomorrowMorningTime: settings.tomorrowMorningTime,
+      allowHighFrequencyScheduling: settings.allowHighFrequencyScheduling,
     };
   }
 
@@ -38,12 +40,12 @@ export class SettingsService {
       });
     }
 
-    const data: Record<string, string> = {};
+    const data: Prisma.UserSettingsUpdateInput = {};
 
     if (dto.aiBaseUrl !== undefined) {
       data.aiBaseUrl = dto.aiBaseUrl;
     }
-    if (dto.aiApiKey !== undefined) {
+    if (typeof dto.aiApiKey === 'string' && dto.aiApiKey !== '') {
       data.aiApiKeyEncrypted = dto.aiApiKey;
     }
     if (dto.aiModel !== undefined) {
@@ -58,6 +60,9 @@ export class SettingsService {
     if (dto.tomorrowMorningTime !== undefined) {
       data.tomorrowMorningTime = dto.tomorrowMorningTime;
     }
+    if (dto.allowHighFrequencyScheduling !== undefined) {
+      data.allowHighFrequencyScheduling = dto.allowHighFrequencyScheduling;
+    }
 
     const updated = await this.prisma.userSettings.update({
       where: { userId },
@@ -71,6 +76,7 @@ export class SettingsService {
       afternoonTime: updated.afternoonTime,
       eveningTime: updated.eveningTime,
       tomorrowMorningTime: updated.tomorrowMorningTime,
+      allowHighFrequencyScheduling: updated.allowHighFrequencyScheduling,
     };
   }
 }

@@ -7,6 +7,7 @@ export interface Settings {
   afternoonTime: string | null;
   eveningTime: string | null;
   tomorrowMorningTime: string | null;
+  allowHighFrequencyScheduling: boolean;
 }
 
 export interface UpdateSettingsDto {
@@ -16,6 +17,7 @@ export interface UpdateSettingsDto {
   afternoonTime?: string | null;
   eveningTime?: string | null;
   tomorrowMorningTime?: string | null;
+  allowHighFrequencyScheduling?: boolean;
 }
 
 export const settingsApi = {

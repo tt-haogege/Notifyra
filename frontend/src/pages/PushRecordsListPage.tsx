@@ -71,8 +71,8 @@ export default function PushRecordsListPage() {
             options={[
               { value: '', label: '状态：全部' },
               { value: 'success', label: '成功' },
-              { value: 'failed', label: '失败' },
-              { value: 'pending', label: '处理中' },
+              { value: 'failure', label: '失败' },
+              { value: 'partial', label: '部分成功' },
             ]}
           />
           <Select
@@ -131,8 +131,8 @@ export default function PushRecordsListPage() {
                 {sourceLabel(r.source)}
               </div>
               <div>
-                <StatusBadge tone={r.status === 'success' ? 'green' : r.status === 'failed' ? 'red' : 'blue'}>
-                  {r.status === 'success' ? '成功' : r.status === 'failed' ? '失败' : '处理中'}
+                <StatusBadge tone={r.status === 'success' ? 'green' : r.status === 'failure' ? 'red' : 'orange'}>
+                  {r.status === 'success' ? '成功' : r.status === 'failure' ? '失败' : '部分成功'}
                 </StatusBadge>
               </div>
             </div>

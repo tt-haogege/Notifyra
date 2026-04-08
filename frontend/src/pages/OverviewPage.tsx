@@ -35,7 +35,7 @@ export default function OverviewPage() {
   const totalNotifications = notifications?.total ?? 0;
   const activeChannels = channels?.items.filter((c) => c.status === 'active').length ?? 0;
   const sevenDaySuccess = weeklyRecords?.items.filter((r) => r.status === 'success').length ?? 0;
-  const sevenDayFailed = weeklyRecords?.items.filter((r) => r.status === 'failed').length ?? 0;
+  const sevenDayFailure = weeklyRecords?.items.filter((r) => r.status === 'failure').length ?? 0;
 
   const shortcuts = [
     { title: '添加渠道', description: '绑定第一个通知渠道', to: '/channels/new', tone: 'indigo' },
@@ -67,8 +67,8 @@ export default function OverviewPage() {
             </div>
             <div className="rounded-2xl border border-app-input-border bg-app-input p-4">
               <div className="mb-2 text-[13px] font-bold text-app-muted">7 天失败</div>
-              <div className={`text-3xl font-extrabold ${sevenDayFailed > 0 ? 'text-[#fca5a5]' : 'text-app-text'}`}>
-                {sevenDayFailed}
+              <div className={`text-3xl font-extrabold ${sevenDayFailure > 0 ? 'text-[#fca5a5]' : 'text-app-text'}`}>
+                {sevenDayFailure}
               </div>
             </div>
           </div>
@@ -109,8 +109,8 @@ export default function OverviewPage() {
               <span className="text-sm text-app-muted">{new Date(r.pushedAt).toLocaleString('zh-CN')}</span>
               <strong className="font-semibold">{r.notificationName}</strong>
               <span className="text-sm text-app-muted">{r.channelName}</span>
-              <span className={`status-badge ${r.status === 'success' ? 'green' : r.status === 'failed' ? 'red' : 'blue'}`}>
-                {r.status === 'success' ? '成功' : r.status === 'failed' ? '失败' : '处理中'}
+              <span className={`status-badge ${r.status === 'success' ? 'green' : r.status === 'failure' ? 'red' : 'orange'}`}>
+                {r.status === 'success' ? '成功' : r.status === 'failure' ? '失败' : '部分成功'}
               </span>
             </Link>
           ))}
