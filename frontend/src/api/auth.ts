@@ -15,14 +15,8 @@ export interface UserProfile {
 export const authApi = {
   login: (username: string, password: string) =>
     client
-      .post<{ token: string; username: string }>('/auth/login', {
-        username,
-        password,
-      })
-      .then((r) => ({
-        accessToken: r.data.token,
-        username: r.data.username,
-      })),
+      .post<{ token: string; username: string }>('/auth/login', { username, password })
+      .then((r) => ({ accessToken: r.data.token, username: r.data.username })),
 
   register: (username: string, password: string) =>
     client.post<{ userId: string }>('/auth/register', { username, password }).then((r) => r.data),

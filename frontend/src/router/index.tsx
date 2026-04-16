@@ -1,7 +1,6 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import App from '../App';
-import LoginPage from '../pages/LoginPage';
-import RegisterPage from '../pages/RegisterPage';
+import AuthPage from '../pages/AuthPage';
 import OverviewPage from '../pages/OverviewPage';
 import NotificationsListPage from '../pages/NotificationsListPage';
 import NotificationFormPage from '../pages/NotificationFormPage';
@@ -20,8 +19,8 @@ export const router = createBrowserRouter([
     element: <App />,
     children: [
       { index: true, element: <Navigate replace to="/login" /> },
-      { path: 'login', element: <LoginPage /> },
-      { path: 'register', element: <RegisterPage /> },
+      { path: 'login', element: <AuthPage /> },
+      { path: 'register', element: <AuthPage /> },
       { path: 'overview', element: <OverviewPage /> },
       { path: 'notifications', element: <NotificationsListPage /> },
       { path: 'notifications/new', element: <NotificationFormPage /> },

@@ -1,5 +1,7 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { Cable, Bell, FlaskConical, History, type LucideIcon } from 'lucide-react';
 import { Card } from '../components/common/Card';
 import { PageHeader } from '../components/layout/PageHeader';
 import { notificationsApi } from '../api/notifications';
@@ -7,9 +9,12 @@ import { channelsApi } from '../api/channels';
 import { recordsApi } from '../api/records';
 
 export default function OverviewPage() {
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const startDate = sevenDaysAgo.toISOString();
+  // 截断到天，避免毫秒级时间戳每次渲染不同导致 queryKey 变化引发无限请求
+  const startDate = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().split('T')[0];
+  }, []);
 
   const { data: notifications } = useQuery({
     queryKey: ['notifications', { pageSize: 100 }],
@@ -37,11 +42,11 @@ export default function OverviewPage() {
   const sevenDaySuccess = weeklyRecords?.items.filter((r) => r.status === 'success').length ?? 0;
   const sevenDayFailure = weeklyRecords?.items.filter((r) => r.status === 'failure').length ?? 0;
 
-  const shortcuts = [
-    { title: '添加渠道', description: '绑定第一个通知渠道', to: '/channels/new', tone: 'indigo' },
-    { title: '新建通知', description: '创建你的第一条通知', to: '/notifications/new', tone: 'blue' },
-    { title: '测试模块', description: '验证渠道连通性', to: '/test', tone: 'green' },
-    { title: '推送记录', description: '查看近期推送结果', to: '/push-records', tone: 'orange' },
+  const shortcuts: { title: string; description: string; to: string; tone: string; icon: LucideIcon }[] = [
+    { title: '添加渠道', description: '绑定第一个通知渠道', to: '/channels/new',    tone: 'indigo', icon: Cable },
+    { title: '新建通知', description: '创建你的第一条通知', to: '/notifications/new', tone: 'blue',   icon: Bell },
+    { title: '测试模块', description: '验证渠道连通性',     to: '/test',            tone: 'green',  icon: FlaskConical },
+    { title: '推送记录', description: '查看近期推送结果',   to: '/push-records',    tone: 'orange', icon: History },
   ];
 
   return (
@@ -82,7 +87,9 @@ export default function OverviewPage() {
                 key={s.to}
                 to={s.to}
               >
-                <div className="shortcut-icon" />
+                <div className="shortcut-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <s.icon size={18} strokeWidth={2} color="white" />
+                </div>
                 <div className="grid gap-1">
                   <div className="font-bold text-app-text">{s.title}</div>
                   <div className="text-sm text-app-muted">{s.description}</div>
@@ -102,7 +109,7 @@ export default function OverviewPage() {
         <div className="grid gap-2">
           {recentRecords?.items.map((r) => (
             <Link
-              className="flex flex-col gap-3 rounded-2xl bg-[var(--muted-card)] px-4 py-4 text-app-text no-underline transition hover:-translate-y-0.5 sm:flex-row sm:items-center sm:justify-between"
+              className="hover-slide flex flex-col gap-3 rounded-2xl bg-[var(--muted-card)] px-4 py-4 text-app-text no-underline transition sm:flex-row sm:items-center sm:justify-between"
               key={r.id}
               to={`/push-records/${r.id}`}
             >
