@@ -2,6 +2,7 @@
 node_modules/
 
 /generated/prisma
+data/app.db
 
 dist/
 .gitnexus

@@ -77,3 +77,40 @@ export function CopyIcon(props: IconProps) {
     </Svg>
   );
 }
+
+/** AI / 智能助手占位图标：四角星 + 装饰十字（Lucide sparkles 简化版）。 */
+export function SparklesIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" />
+      <path d="M19 3v3M20.5 4.5h-3" />
+      <path d="M5 17v3M6.5 18.5h-3" />
+    </Svg>
+  );
+}
+
+export function CheckIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <polyline points="20 6 9 17 4 12" />
+    </Svg>
+  );
+}
+
+export function CheckCircleIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <polyline points="22 4 12 14.01 9 11.01" />
+    </Svg>
+  );
+}
+
+export function CloseIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </Svg>
+  );
+}

@@ -1,13 +1,16 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card } from '../components/common/Card';
 import { Select } from '../components/common/Select';
 import { PageHeader } from '../components/layout/PageHeader';
 import { TriggerTypeSelector } from '../components/common/TriggerTypeSelector';
 import { DateTimePopover } from '../components/common/DateTimePopover';
+import { AiQuickCreateModal } from '../components/ai/AiQuickCreateModal';
+import { CheckCircleIcon, SparklesIcon } from '../components/common/icons';
 import { notificationsApi } from '../api/notifications';
 import { channelsApi } from '../api/channels';
+import { aiApi } from '../api/ai';
 import { emitToast } from '../components/common/toast-events';
 import type { Notification } from '../api/notifications';
 
@@ -94,13 +97,51 @@ const getNotificationDraftFromExisting = (existing: Notification, todayValue: st
   };
 };
 
+interface AiSessionLike {
+  id: string;
+  collectedParams: Record<string, unknown>;
+}
+
+const getNotificationDraftFromAiSession = (session: AiSessionLike, todayValue: string) => {
+  const p = session.collectedParams as {
+    name?: string;
+    title?: string;
+    content?: string;
+    triggerType?: Notification['triggerType'];
+    triggerConfig?: { executeAt?: string; cron?: string };
+    channelIds?: string[];
+  };
+  const schedule = parseScheduleParts(p.triggerConfig?.executeAt ?? '');
+
+  return {
+    sourceKey: `ai-${session.id}`,
+    name: p.name ?? '',
+    triggerType: p.triggerType ?? 'once',
+    title: p.title ?? '',
+    content: p.content ?? '',
+    selectedChannels: Array.isArray(p.channelIds) ? p.channelIds : [],
+    selectedDate: schedule.date || todayValue,
+    selectedHour: schedule.hour || '09',
+    selectedMinute: schedule.minute || '00',
+    selectedSecond: schedule.second || '00',
+    cronExpression: p.triggerConfig?.cron ?? '',
+  };
+};
+
 export default function NotificationFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const isEdit = !!id;
   const todayValue = formatDateValue(new Date());
 
+  const aiSessionId = useMemo(
+    () => new URLSearchParams(location.search).get('ai_session'),
+    [location.search],
+  );
+
   const [draft, setDraft] = useState(() => getDefaultNotificationDraft(todayValue, 'new'));
+  const [aiModalOpen, setAiModalOpen] = useState(false);
 
   const { data: channels } = useQuery({
     queryKey: ['channels', { pageSize: 100 }],
@@ -113,12 +154,25 @@ export default function NotificationFormPage() {
     enabled: isEdit,
   });
 
-  useEffect(() => {
-    if (!isEdit || !existing || draft.sourceKey === existing.id) return;
-    setDraft(getNotificationDraftFromExisting(existing, todayValue));
-  }, [draft.sourceKey, existing, isEdit, todayValue]);
+  const { data: aiSession } = useQuery({
+    queryKey: ['ai-session', aiSessionId],
+    queryFn: () => aiApi.getSessionDetail(aiSessionId!),
+    enabled: !!aiSessionId && !isEdit,
+  });
 
-  const currentDraft = draft;
+  // 根据数据源派生期望的 draft。sourceKey 驱动：数据源变化时自动切换，
+  // 用户本地编辑不会被重置（因为编辑后 draft.sourceKey === hydrated.sourceKey）。
+  const hydratedDraft = useMemo(() => {
+    if (isEdit && existing) return getNotificationDraftFromExisting(existing, todayValue);
+    if (!isEdit && aiSession) return getNotificationDraftFromAiSession(aiSession, todayValue);
+    return null;
+  }, [isEdit, existing, aiSession, todayValue]);
+
+  const currentDraft =
+    hydratedDraft && draft.sourceKey !== hydratedDraft.sourceKey ? hydratedDraft : draft;
+
+  type Draft = typeof draft;
+  const patch = (changes: Partial<Draft>) => setDraft({ ...currentDraft, ...changes });
   const {
     name,
     triggerType,
@@ -138,6 +192,9 @@ export default function NotificationFormPage() {
   const createMutation = useMutation({
     mutationFn: (data: Parameters<typeof notificationsApi.create>[0]) => notificationsApi.create(data),
     onSuccess: (data) => {
+      if (aiSessionId) {
+        aiApi.linkNotification(aiSessionId, data.id).catch(() => undefined);
+      }
       emitToast('通知创建成功', 'success');
       navigate(`/notifications/${data.id}`);
     },
@@ -189,6 +246,47 @@ export default function NotificationFormPage() {
           <button className="ghost-button" type="button" onClick={() => navigate('/notifications')}>取消</button>
         }
       />
+      {!isEdit && !aiSession && (
+        <div
+          className="preview-box"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            minHeight: 0,
+          }}
+        >
+          <span
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+          >
+            <SparklesIcon size={16} />
+            <strong>想更快？</strong>
+            <span className="muted-text">
+              一句话描述需求，AI 帮你自动填好所有字段。
+            </span>
+          </span>
+          <button
+            className="ghost-button"
+            type="button"
+            onClick={() => setAiModalOpen(true)}
+          >
+            打开 AI 对话
+          </button>
+        </div>
+      )}
+      {!isEdit && aiSession && (
+        <div className="preview-box success" style={{ minHeight: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <CheckCircleIcon size={16} />
+            <strong>已根据 AI 对话自动预填</strong>
+          </div>
+          <p className="muted-text" style={{ margin: '4px 0 0 0' }}>
+            下方字段可自由修改，确认无误后点击"创建通知"。
+          </p>
+        </div>
+      )}
+      <AiQuickCreateModal open={aiModalOpen} onClose={() => setAiModalOpen(false)} />
       <Card className="stack-gap">
         <div>
           <h3>{isEdit ? '编辑配置' : '手动创建'}</h3>
@@ -198,14 +296,14 @@ export default function NotificationFormPage() {
           <div className="field-label">触发类型</div>
           <TriggerTypeSelector
             value={triggerType}
-            onChange={(value) => setDraft((prev) => ({ ...prev, triggerType: value }))}
+            onChange={(value) => patch({ triggerType: value })}
           />
           <p className="helper-text">不同触发类型会显示不同的触发时间配置方式；单次通知支持精确到秒。</p>
         </div>
         <div className="form-grid two-columns">
           <div>
             <div className="field-label">通知名称</div>
-            <input className="input-shell full-width" value={name} onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))} placeholder="请输入通知名称" />
+            <input className="input-shell full-width" value={name} onChange={(e) => patch({ name: e.target.value })} placeholder="请输入通知名称" />
           </div>
           <div>
             <div className="field-label">发送渠道</div>
@@ -214,7 +312,7 @@ export default function NotificationFormPage() {
                 className="input-shell full-width"
                 multiple
                 values={selectedChannels}
-                onValuesChange={(values) => setDraft((prev) => ({ ...prev, selectedChannels: values }))}
+                onValuesChange={(values) => patch({ selectedChannels: values })}
                 options={channelOptions}
                 placeholder="请选择发送渠道"
               />
@@ -225,7 +323,7 @@ export default function NotificationFormPage() {
           </div>
           <div>
             <div className="field-label">标题</div>
-            <input className="input-shell full-width" value={title} onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))} placeholder="请输入通知标题" />
+            <input className="input-shell full-width" value={title} onChange={(e) => patch({ title: e.target.value })} placeholder="请输入通知标题" />
           </div>
           {triggerType !== 'webhook' && (
             <div>
@@ -235,19 +333,18 @@ export default function NotificationFormPage() {
                   value={{ date: selectedDate, hour: selectedHour, minute: selectedMinute, second: selectedSecond }}
                   minDate={todayValue}
                   onConfirm={({ date, hour, minute, second }) => {
-                    setDraft((prev) => ({
-                      ...prev,
+                    patch({
                       selectedDate: date,
                       selectedHour: hour,
                       selectedMinute: minute,
                       selectedSecond: second,
-                    }));
+                    });
                   }}
                 />
               ) : (
                 <>
                   <div className="input-shell highlight stack-gap">
-                    <input className="full-width" value={cronExpression} onChange={(e) => setDraft((prev) => ({ ...prev, cronExpression: e.target.value }))} placeholder="支持 5 位或 6 位 Cron" style={{ background: 'transparent', border: 'none', outline: 'none', color: 'inherit' }} />
+                    <input className="full-width" value={cronExpression} onChange={(e) => patch({ cronExpression: e.target.value })} placeholder="支持 5 位或 6 位 Cron" style={{ background: 'transparent', border: 'none', outline: 'none', color: 'inherit' }} />
                   </div>
                   <p className="helper-text">5 位：分 时 日 月 周；6 位：秒 分 时 日 月 周。</p>
                 </>
@@ -257,7 +354,7 @@ export default function NotificationFormPage() {
         </div>
         <div>
           <div className="field-label">正文</div>
-          <textarea className="textarea-shell full-width" value={content} onChange={(e) => setDraft((prev) => ({ ...prev, content: e.target.value }))} placeholder="请输入通知正文..." />
+          <textarea className="textarea-shell full-width" value={content} onChange={(e) => patch({ content: e.target.value })} placeholder="请输入通知正文..." />
         </div>
         <div className="preview-box">
           <strong>触发类型说明</strong>

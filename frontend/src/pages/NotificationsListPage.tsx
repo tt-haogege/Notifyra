@@ -11,7 +11,8 @@ import { emitToast } from '../components/common/toast-events';
 import { notificationsApi } from '../api/notifications';
 import type { Notification as NotificationType } from '../api/notifications';
 import { CHANNEL_TYPE_LABELS } from '../constants/channelTypes';
-import { EyeIcon, PencilIcon, TrashIcon } from '../components/common/icons';
+import { EyeIcon, PencilIcon, SparklesIcon, TrashIcon } from '../components/common/icons';
+import { AiQuickCreateModal } from '../components/ai/AiQuickCreateModal';
 
 const triggerMap: Record<string, string> = {
   once: '单次',
@@ -26,6 +27,7 @@ export default function NotificationsListPage() {
   const [triggerFilter, setTriggerFilter] = useState('');
   const [keyword, setKeyword] = useState('');
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['notifications', page, statusFilter, triggerFilter, keyword],
@@ -63,6 +65,15 @@ export default function NotificationsListPage() {
         description="管理你的通知规则、状态、渠道与触发方式。"
         actions={
           <>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() => setAiModalOpen(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <SparklesIcon size={16} />
+              <span>AI 一句话新建</span>
+            </button>
             <Link className="primary-button" to="/notifications/new">新建通知</Link>
           </>
         }
@@ -204,6 +215,7 @@ export default function NotificationsListPage() {
           <button className="segment-tab" disabled={page >= Math.ceil(data.total / 20)} onClick={() => setPage((p) => p + 1)}>下一页</button>
         </div>
       )}
+      <AiQuickCreateModal open={aiModalOpen} onClose={() => setAiModalOpen(false)} />
       <ConfirmDialog
         open={!!pendingDelete}
         title="确认删除通知"

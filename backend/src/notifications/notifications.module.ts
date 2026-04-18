@@ -20,6 +20,10 @@ import { WebhookTokenService } from './webhook-token.service';
     NotificationTriggerService,
     WebhookTokenService,
   ],
-  exports: [NotificationsService, NotificationExecutionService],
+  exports: [
+    NotificationsService,
+    NotificationExecutionService,
+    NotificationTriggerService,
+  ],
 })
 export class NotificationsModule {}
