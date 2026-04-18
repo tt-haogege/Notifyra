@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { authApi } from '../api/auth';
+import { getApiErrorMessage } from '../api/errors';
 import AnimatedCharacters from '../components/login/AnimatedCharacters';
 import { useToast } from '../components/common/toast-context';
 
@@ -52,7 +53,7 @@ export default function AuthPage() {
       toast(`欢迎回来，${result.username}！`, 'success');
       setTimeout(() => window.location.replace('/overview'), 600);
     } catch (err: unknown) {
-      setError((err as { response?: { data?: { message?: string } } })?.response?.data?.message || '登录失败');
+      setError(getApiErrorMessage(err, '登录失败'));
     }
   };
 
@@ -67,7 +68,7 @@ export default function AuthPage() {
       toast('注册成功，请登录', 'success');
       reset('login');
     } catch (err: unknown) {
-      setError((err as { response?: { data?: { message?: string } } })?.response?.data?.message || '注册失败');
+      setError(getApiErrorMessage(err, '注册失败'));
     }
   };
 

@@ -23,7 +23,10 @@ export class ChannelsController {
   constructor(private channelsService: ChannelsService) {}
 
   @Post()
-  create(@CurrentUser() user: { userId: string }, @Body() dto: CreateChannelDto) {
+  create(
+    @CurrentUser() user: { userId: string },
+    @Body() dto: CreateChannelDto,
+  ) {
     return this.channelsService.create(user.userId, dto);
   }
 
@@ -64,10 +67,7 @@ export class ChannelsController {
   }
 
   @Post(':id/reset-token')
-  resetToken(
-    @CurrentUser() user: { userId: string },
-    @Param('id') id: string,
-  ) {
+  resetToken(@CurrentUser() user: { userId: string }, @Param('id') id: string) {
     return this.channelsService.resetToken(user.userId, id);
   }
 }

@@ -1,4 +1,7 @@
-import client from './client';
+import { http } from './client';
+import type { PaginatedResult } from '../types/shared';
+
+export type { PaginatedResult };
 
 export type PushRecordSource = 'scheduler' | 'webhook' | 'test_notification' | 'channel_api';
 export type PushRecordStatus = 'success' | 'partial' | 'failure';
@@ -59,17 +62,8 @@ export interface ListRecordsParams {
   endDate?: string;
 }
 
-export interface PaginatedResult<T> {
-  items: T[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
 export const recordsApi = {
   list: (params?: ListRecordsParams) =>
-    client.get<PaginatedResult<PushRecordListItem>>('/push-records', { params }).then((r) => r.data),
-
-  getDetail: (id: string) =>
-    client.get<PushRecordDetail>(`/push-records/${id}`).then((r) => r.data),
+    http.get<PaginatedResult<PushRecordListItem>>('/push-records', { params }),
+  getDetail: (id: string) => http.get<PushRecordDetail>(`/push-records/${id}`),
 };

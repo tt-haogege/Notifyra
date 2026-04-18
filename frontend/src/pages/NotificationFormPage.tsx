@@ -137,9 +137,9 @@ export default function NotificationFormPage() {
 
   const createMutation = useMutation({
     mutationFn: (data: Parameters<typeof notificationsApi.create>[0]) => notificationsApi.create(data),
-    onSuccess: () => {
+    onSuccess: (data) => {
       emitToast('通知创建成功', 'success');
-      navigate('/notifications');
+      navigate(`/notifications/${data.id}`);
     },
   });
 
@@ -267,6 +267,22 @@ export default function NotificationFormPage() {
             <li>Webhook 通知：提供 Webhook URL 供外部调用触发</li>
           </ul>
         </div>
+        {triggerType === 'webhook' && (
+          <div className="preview-box success">
+            <strong>Webhook 调用规则</strong>
+            <ul className="bullet-list" style={{ marginTop: 8 }}>
+              <li>
+                请求体可携带 <code>title</code> / <code>content</code>，若非空将
+                <strong>覆盖</strong>上方预设；未传则使用预设值。
+              </li>
+              <li>
+                预设或覆盖后的文本均支持 <code>{'{{body.xxx}}'}</code> 占位符，例如在标题中写
+                <code>{'{{body.device.name}} 告警'}</code>，调用时传入 <code>device.name</code> 即会被替换。
+              </li>
+              <li>创建完成后可在详情页查看调用路径、复制 Token 与代码示例。</li>
+            </ul>
+          </div>
+        )}
         <div className="form-actions">
           <button className="primary-button" type="button" onClick={handleSubmit} disabled={createMutation.isPending || updateMutation.isPending}>
             {isEdit ? '保存修改' : '创建通知'}

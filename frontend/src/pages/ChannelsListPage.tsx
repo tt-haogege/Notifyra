@@ -10,6 +10,7 @@ import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { emitToast } from '../components/common/toast-events';
 import { channelsApi, type Channel, type ChannelStatus } from '../api/channels';
 import { CHANNEL_TYPE_LABELS, CHANNEL_TYPE_OPTIONS } from '../constants/channelTypes';
+import { EyeIcon, PencilIcon, TrashIcon } from '../components/common/icons';
 
 export default function ChannelsListPage() {
   const queryClient = useQueryClient();
@@ -146,14 +147,20 @@ export default function ChannelsListPage() {
                 <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}> 个通知</span>
               </div>
               <div className="table-actions align-right">
-                <Link className="icon-button" to={`/channels/${ch.id}`}>◔</Link>
-                <Link className="icon-button" to={`/channels/${ch.id}/edit`}>✎</Link>
+                <Link className="icon-button" to={`/channels/${ch.id}`} aria-label="查看渠道" title="查看">
+                  <EyeIcon />
+                </Link>
+                <Link className="icon-button" to={`/channels/${ch.id}/edit`} aria-label="编辑渠道" title="编辑">
+                  <PencilIcon />
+                </Link>
                 <button
                   className="icon-button danger"
                   type="button"
+                  aria-label="删除渠道"
+                  title="删除"
                   onClick={() => setPendingDelete({ id: ch.id, name: ch.name })}
                 >
-                  ⌫
+                  <TrashIcon />
                 </button>
               </div>
             </div>

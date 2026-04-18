@@ -1,32 +1,50 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ChannelDriverRegistry } from '../channels/drivers/channel-driver.registry';
 import { PrismaService } from '../shared/prisma/prisma.service';
+import { WebhookTokenService } from './webhook-token.service';
+
+type NotificationWithChannels = Prisma.NotificationGetPayload<{
+  include: { channels: { include: { channel: true } } };
+}>;
+
+type ChannelRow = NotificationWithChannels['channels'][number]['channel'];
+
+type OverallResult = 'success' | 'partial' | 'failure';
+
+/** 仅当值为非空字符串（去除首尾空格后）时返回本身，否则返回 undefined。 */
+function pickNonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() !== '' ? value : undefined;
+}
+
+export interface ExecutionSummary {
+  notificationId: string;
+  totalChannels: number;
+  successCount: number;
+  failureCount: number;
+  overallResult: OverallResult;
+}
 
 @Injectable()
 export class NotificationExecutionService {
   constructor(
     private prisma: PrismaService,
     private driverRegistry: ChannelDriverRegistry,
+    private tokenService: WebhookTokenService,
   ) {}
 
   async executeNotification(id: string, source = 'scheduler') {
-    const notification = await this.prisma.notification.findFirst({
-      where: { id },
-      include: {
-        channels: {
-          include: {
-            channel: true,
-          },
-        },
-      },
-    });
-
-    if (!notification) {
-      throw new NotFoundException('通知不存在');
-    }
-
-    return this.doExecute(notification, source);
+    const notification = await this.loadNotification(id);
+    return this.executeChannels(
+      notification,
+      notification.title,
+      notification.content,
+      source,
+    );
   }
 
   async executeNotificationWithOverrides(
@@ -34,50 +52,35 @@ export class NotificationExecutionService {
     overrides: { title?: string; content?: string },
     source: string,
   ) {
-    const notification = await this.prisma.notification.findFirst({
-      where: { id },
-      include: {
-        channels: {
-          include: {
-            channel: true,
-          },
-        },
-      },
-    });
-
-    if (!notification) {
-      throw new NotFoundException('通知不存在');
-    }
-
-    const title = overrides.title ?? notification.title;
-    const content = overrides.content ?? notification.content;
-
-    return this.doExecuteWithContent(notification, title, content, source);
+    const notification = await this.loadNotification(id);
+    return this.executeChannels(
+      notification,
+      overrides.title ?? notification.title,
+      overrides.content ?? notification.content,
+      source,
+    );
   }
 
-  async executeNotificationWithTemplate(id: string, webhookBody: Record<string, unknown>, source = 'webhook') {
-    const notification = await this.prisma.notification.findFirst({
-      where: { id },
-      include: {
-        channels: {
-          include: {
-            channel: true,
-          },
-        },
-      },
-    });
+  async executeNotificationWithTemplate(
+    id: string,
+    webhookBody: Record<string, unknown>,
+    source = 'webhook',
+  ) {
+    const notification = await this.loadNotification(id);
 
-    if (!notification) {
-      throw new NotFoundException('通知不存在');
-    }
+    // 来源优先级：
+    //   1. webhookBody.title / webhookBody.content 显式传入且为非空字符串 → 覆盖
+    //   2. 否则使用通知配置里的 title / content
+    //   3. 无论来自哪一层，最终都过一次 renderTemplate，保留 {{body.xxx}} 占位符能力
+    const titleSource =
+      pickNonEmptyString(webhookBody.title) ?? notification.title;
+    const contentSource =
+      pickNonEmptyString(webhookBody.content) ?? notification.content;
 
-    const renderedTitle = this.renderTemplate(notification.title, webhookBody);
-    const renderedContent = this.renderTemplate(notification.content, webhookBody);
-
-    return this.doExecuteWithContent(
+    return this.executeChannels(
       notification,
-      renderedTitle,
-      renderedContent,
+      this.renderTemplate(titleSource, webhookBody),
+      this.renderTemplate(contentSource, webhookBody),
       source,
     );
   }
@@ -87,33 +90,7 @@ export class NotificationExecutionService {
     webhookBody: Record<string, unknown>,
     sourceIp: string | null,
   ) {
-    const notifications = await this.prisma.notification.findMany({
-      where: { triggerType: 'webhook' },
-      select: {
-        id: true,
-        status: true,
-        webhookTokenHash: true,
-      },
-    });
-
-    let targetId: string | null = null;
-
-    for (const notification of notifications) {
-      if (!notification.webhookTokenHash) continue;
-
-      const matched = await this.isWebhookTokenMatched(token, notification.webhookTokenHash);
-      if (!matched) continue;
-      if (notification.status !== 'active') {
-        throw new BadRequestException('通知未启用');
-      }
-
-      targetId = notification.id;
-      break;
-    }
-
-    if (!targetId) {
-      throw new NotFoundException('Webhook 通知不存在');
-    }
+    const targetId = await this.resolveWebhookNotificationId(token);
 
     await this.prisma.webhookRequestLog.create({
       data: {
@@ -123,208 +100,158 @@ export class NotificationExecutionService {
       },
     });
 
-    const result = await this.executeNotificationWithTemplate(targetId, webhookBody, 'webhook');
+    const executionResult = await this.executeNotificationWithTemplate(
+      targetId,
+      webhookBody,
+      'webhook',
+    );
 
-    return { success: true, notificationId: targetId, executionResult: result };
+    return { success: true, notificationId: targetId, executionResult };
   }
 
-  private async doExecute(notification: Record<string, unknown>, source: string) {
-    const activeChannels = (notification['channels'] as Array<{ channel: Record<string, unknown> }>)
-      .map((nc) => nc.channel)
-      .filter((ch) => ch['status'] === 'active');
-
-    let successCount = 0;
-    let failureCount = 0;
-
-    for (const channel of activeChannels) {
-      const config = JSON.parse(channel['configJson'] as string);
-      let attempt = 0;
-      let lastError: string | undefined;
-      let sent = false;
-
-      for (attempt = 0; attempt <= (channel['retryCount'] as number); attempt++) {
-        const driver = this.driverRegistry.getDriver(channel['type'] as string);
-        const result = await driver.send({
-          channel: {
-            id: channel['id'] as string,
-            name: channel['name'] as string,
-            type: channel['type'] as string,
-          },
-          config,
-          title: notification['title'] as string,
-          content: notification['content'] as string,
-        });
-
-        if (result.success) {
-          await this.writePushResult({
-            notificationId: notification['id'] as string,
-            userId: notification['userId'] as string,
-            channelId: channel['id'] as string,
-            source,
-            titleSnapshot: notification['title'] as string,
-            contentSnapshot: notification['content'] as string,
-            channelResult: 'success',
-            errorMessage: undefined,
-            retryAttempts: attempt,
-          });
-          successCount++;
-          sent = true;
-          break;
-        }
-
-        lastError = result.errorMessage;
-      }
-
-      if (!sent) {
-        await this.writePushResult({
-          notificationId: notification['id'] as string,
-          userId: notification['userId'] as string,
-          channelId: channel['id'] as string,
-          source,
-          titleSnapshot: notification['title'] as string,
-          contentSnapshot: notification['content'] as string,
-          channelResult: 'failure',
-          errorMessage: lastError,
-          retryAttempts: attempt,
-        });
-        failureCount++;
-      }
-    }
-
-    let overallResult: 'success' | 'partial' | 'failure';
-    if (activeChannels.length === 0) {
-      overallResult = 'success';
-    } else if (successCount === activeChannels.length) {
-      overallResult = 'success';
-    } else if (failureCount === activeChannels.length) {
-      overallResult = 'failure';
-    } else {
-      overallResult = 'partial';
-    }
-
-    return {
-      notificationId: notification['id'] as string,
-      totalChannels: activeChannels.length,
-      successCount,
-      failureCount,
-      overallResult,
-    };
+  private async loadNotification(
+    id: string,
+  ): Promise<NotificationWithChannels> {
+    const notification = await this.prisma.notification.findFirst({
+      where: { id },
+      include: { channels: { include: { channel: true } } },
+    });
+    if (!notification) throw new NotFoundException('通知不存在');
+    return notification;
   }
 
-  private async doExecuteWithContent(
-    notification: Record<string, unknown>,
-    renderedTitle: string,
-    renderedContent: string,
+  private async resolveWebhookNotificationId(token: string): Promise<string> {
+    const candidates = await this.prisma.notification.findMany({
+      where: { triggerType: 'webhook' },
+      select: { id: true, status: true, webhookTokenHash: true },
+    });
+
+    for (const candidate of candidates) {
+      const matched = await this.tokenService.matches(
+        token,
+        candidate.webhookTokenHash,
+      );
+      if (!matched) continue;
+      if (candidate.status !== 'active') {
+        throw new BadRequestException('通知未启用');
+      }
+      return candidate.id;
+    }
+
+    throw new NotFoundException('Webhook 通知不存在');
+  }
+
+  private async executeChannels(
+    notification: NotificationWithChannels,
+    title: string,
+    content: string,
     source: string,
-  ) {
-    const activeChannels = (notification['channels'] as Array<{ channel: Record<string, unknown> }>)
+  ): Promise<ExecutionSummary> {
+    const activeChannels = notification.channels
       .map((nc) => nc.channel)
-      .filter((ch) => ch['status'] === 'active');
+      .filter((ch) => ch.status === 'active');
 
     let successCount = 0;
     let failureCount = 0;
 
     for (const channel of activeChannels) {
-      const config = JSON.parse(channel['configJson'] as string);
-      let attempt = 0;
-      let lastError: string | undefined;
-      let sent = false;
-
-      for (attempt = 0; attempt <= (channel['retryCount'] as number); attempt++) {
-        const driver = this.driverRegistry.getDriver(channel['type'] as string);
-        const result = await driver.send({
-          channel: {
-            id: channel['id'] as string,
-            name: channel['name'] as string,
-            type: channel['type'] as string,
-          },
-          config,
-          title: renderedTitle,
-          content: renderedContent,
-        });
-
-        if (result.success) {
-          await this.writePushResult({
-            notificationId: notification['id'] as string,
-            userId: notification['userId'] as string,
-            channelId: channel['id'] as string,
-            source,
-            titleSnapshot: renderedTitle,
-            contentSnapshot: renderedContent,
-            channelResult: 'success',
-            errorMessage: undefined,
-            retryAttempts: attempt,
-          });
-          successCount++;
-          sent = true;
-          break;
-        }
-
-        lastError = result.errorMessage;
-      }
-
-      if (!sent) {
-        await this.writePushResult({
-          notificationId: notification['id'] as string,
-          userId: notification['userId'] as string,
-          channelId: channel['id'] as string,
-          source,
-          titleSnapshot: renderedTitle,
-          contentSnapshot: renderedContent,
-          channelResult: 'failure',
-          errorMessage: lastError,
-          retryAttempts: attempt,
-        });
-        failureCount++;
-      }
-    }
-
-    let overallResult: 'success' | 'partial' | 'failure';
-    if (activeChannels.length === 0) {
-      overallResult = 'success';
-    } else if (successCount === activeChannels.length) {
-      overallResult = 'success';
-    } else if (failureCount === activeChannels.length) {
-      overallResult = 'failure';
-    } else {
-      overallResult = 'partial';
+      const sent = await this.sendViaChannel(channel, title, content);
+      await this.writePushResult({
+        notificationId: notification.id,
+        userId: notification.userId,
+        channelId: channel.id,
+        source,
+        titleSnapshot: title,
+        contentSnapshot: content,
+        result: sent.success ? 'success' : 'failure',
+        errorMessage: sent.success ? undefined : sent.lastError,
+        retryAttempts: sent.attempts,
+      });
+      if (sent.success) successCount++;
+      else failureCount++;
     }
 
     return {
-      notificationId: notification['id'] as string,
+      notificationId: notification.id,
       totalChannels: activeChannels.length,
       successCount,
       failureCount,
-      overallResult,
+      overallResult: this.summarizeResult(
+        activeChannels.length,
+        successCount,
+        failureCount,
+      ),
     };
+  }
+
+  private async sendViaChannel(
+    channel: ChannelRow,
+    title: string,
+    content: string,
+  ): Promise<{ success: boolean; attempts: number; lastError?: string }> {
+    const config = JSON.parse(channel.configJson) as Record<string, unknown>;
+    const driver = this.driverRegistry.getDriver(channel.type);
+    const maxAttempts = channel.retryCount + 1;
+
+    let lastError: string | undefined;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const result = await driver.send({
+        channel: { id: channel.id, name: channel.name, type: channel.type },
+        config,
+        title,
+        content,
+      });
+
+      if (result.success) {
+        return { success: true, attempts: attempt };
+      }
+      lastError = result.errorMessage;
+    }
+
+    // 与原实现保持一致：全败时上报的 retryAttempts 为 retryCount + 1（即总尝试次数）
+    return { success: false, attempts: maxAttempts, lastError };
+  }
+
+  private summarizeResult(
+    total: number,
+    success: number,
+    failure: number,
+  ): OverallResult {
+    if (total === 0) return 'success';
+    if (success === total) return 'success';
+    if (failure === total) return 'failure';
+    return 'partial';
   }
 
   private renderTemplate(text: string, body: Record<string, unknown>): string {
-    return text.replace(/\{\{body\.([^}]+)\}\}/g, (match: string, path: string) => {
+    return text.replace(/\{\{body\.([^}]+)\}\}/g, (match, path: string) => {
       const value = this.getNestedValue(body, path);
-      return value !== undefined ? String(value) : match;
+      return value === undefined || value === null
+        ? match
+        : this.stringifyTemplateValue(value);
     });
   }
 
+  /** 模板占位符的值序列化：原始类型直转字符串，对象/数组用 JSON。 */
+  private stringifyTemplateValue(value: unknown): string {
+    const t = typeof value;
+    if (t === 'string') return value as string;
+    if (t === 'number' || t === 'boolean' || t === 'bigint')
+      return String(value);
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return '';
+    }
+  }
+
   private getNestedValue(obj: Record<string, unknown>, path: string): unknown {
-    return path.split('.').reduce<unknown>((current: unknown, key: string) => {
+    return path.split('.').reduce<unknown>((current, key) => {
       if (current && typeof current === 'object') {
         return (current as Record<string, unknown>)[key];
       }
       return undefined;
     }, obj);
-  }
-
-  private async isWebhookTokenMatched(token: string, webhookTokenHash: string) {
-    if (!webhookTokenHash.startsWith('$2')) {
-      return false;
-    }
-
-    try {
-      return await bcrypt.compare(token, webhookTokenHash);
-    } catch {
-      return false;
-    }
   }
 
   private async writePushResult(params: {
@@ -334,10 +261,10 @@ export class NotificationExecutionService {
     source: string;
     titleSnapshot: string;
     contentSnapshot: string;
-    channelResult: string;
+    result: 'success' | 'failure';
     errorMessage: string | undefined;
     retryAttempts: number;
-  }) {
+  }): Promise<void> {
     const record = await this.prisma.pushRecord.create({
       data: {
         notificationId: params.notificationId,
@@ -346,7 +273,7 @@ export class NotificationExecutionService {
         source: params.source,
         titleSnapshot: params.titleSnapshot,
         contentSnapshot: params.contentSnapshot,
-        result: params.channelResult,
+        result: params.result,
         errorSummary: params.errorMessage,
       },
     });
@@ -355,7 +282,7 @@ export class NotificationExecutionService {
       data: {
         pushRecordId: record.id,
         channelId: params.channelId,
-        result: params.channelResult,
+        result: params.result,
         errorMessage: params.errorMessage,
         retryAttempts: params.retryAttempts,
       },

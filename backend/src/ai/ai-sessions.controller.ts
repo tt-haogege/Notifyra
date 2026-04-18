@@ -20,7 +20,10 @@ export class AiSessionsController {
   constructor(private aiSessionsService: AiSessionsService) {}
 
   @Post()
-  create(@CurrentUser() user: { userId: string }, @Body() dto: CreateAiSessionDto) {
+  create(
+    @CurrentUser() user: { userId: string },
+    @Body() dto: CreateAiSessionDto,
+  ) {
     return this.aiSessionsService.create(user.userId, dto);
   }
 
@@ -56,7 +59,8 @@ export class AiSessionsController {
   updateStatus(
     @CurrentUser() user: { userId: string },
     @Param('id') id: string,
-    @Body() body: { status: 'collecting' | 'ready_to_create' | 'completed' | 'failed' },
+    @Body()
+    body: { status: 'collecting' | 'ready_to_create' | 'completed' | 'failed' },
   ) {
     return this.aiSessionsService.updateStatus(user.userId, id, body.status);
   }
@@ -67,11 +71,18 @@ export class AiSessionsController {
     @Param('id') id: string,
     @Body() body: { params: Record<string, unknown> },
   ) {
-    return this.aiSessionsService.updateCollectedParams(user.userId, id, body.params);
+    return this.aiSessionsService.updateCollectedParams(
+      user.userId,
+      id,
+      body.params,
+    );
   }
 
   @Post(':id/ready')
-  markReadyToCreate(@CurrentUser() user: { userId: string }, @Param('id') id: string) {
+  markReadyToCreate(
+    @CurrentUser() user: { userId: string },
+    @Param('id') id: string,
+  ) {
     return this.aiSessionsService.markReadyToCreate(user.userId, id);
   }
 
@@ -81,6 +92,10 @@ export class AiSessionsController {
     @Param('id') id: string,
     @Body() body: { notificationId: string },
   ) {
-    return this.aiSessionsService.linkNotification(user.userId, id, body.notificationId);
+    return this.aiSessionsService.linkNotification(
+      user.userId,
+      id,
+      body.notificationId,
+    );
   }
 }

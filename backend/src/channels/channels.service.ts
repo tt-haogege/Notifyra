@@ -6,10 +6,14 @@ import {
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../shared/prisma/prisma.service';
+import { encryptChannelToken } from '../shared/token-crypto';
 import {
-  decryptChannelToken,
-  encryptChannelToken,
-} from '../shared/token-crypto';
+  channelBaseSelect,
+  channelDetailSelect,
+  channelListSelect,
+  toChannelDetail,
+  toChannelListItem,
+} from './channel.mapper';
 import {
   normalizeChannelType,
   parseChannelConfig,
@@ -38,24 +42,17 @@ export class ChannelsService {
         configJson: dto.config
           ? serializeChannelConfig(normalizedType, dto.config)
           : dto.configJson
-            ? serializeChannelConfig(normalizedType, parseChannelConfig(normalizedType, dto.configJson))
+            ? serializeChannelConfig(
+                normalizedType,
+                parseChannelConfig(normalizedType, dto.configJson),
+              )
             : '{}',
         retryCount: dto.retryCount ?? 0,
         status: 'active',
         tokenHash,
         tokenEncrypted,
       },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        configJson: true,
-        status: true,
-        retryCount: true,
-        lastUsedAt: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: channelBaseSelect,
     });
 
     return { ...channel, token };
@@ -77,29 +74,13 @@ export class ChannelsService {
         skip: (page - 1) * pageSize,
         take: pageSize,
         orderBy: { updatedAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          status: true,
-          retryCount: true,
-          tokenHash: true,
-          tokenEncrypted: true,
-          lastUsedAt: true,
-          createdAt: true,
-          updatedAt: true,
-          _count: { select: { notifications: true } },
-        },
+        select: channelListSelect,
       }),
       this.prisma.channel.count({ where }),
     ]);
 
     return {
-      items: items.map((item) => ({
-        ...item,
-        tokenEnabled: Boolean(item.tokenEncrypted || item.tokenHash),
-        relatedNotificationCount: item._count.notifications,
-      })),
+      items: items.map(toChannelListItem),
       page,
       pageSize,
       total,
@@ -109,53 +90,12 @@ export class ChannelsService {
   async getDetail(userId: string, id: string) {
     const channel = await this.prisma.channel.findFirst({
       where: { id, userId },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        configJson: true,
-        status: true,
-        retryCount: true,
-        tokenHash: true,
-        tokenEncrypted: true,
-        lastUsedAt: true,
-        createdAt: true,
-        updatedAt: true,
-        notifications: {
-          select: {
-            notification: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
-      },
+      select: channelDetailSelect,
     });
 
     if (!channel) throw new NotFoundException('渠道不存在');
 
-    return {
-      id: channel.id,
-      name: channel.name,
-      type: channel.type,
-      status: channel.status,
-      retryCount: channel.retryCount,
-      lastUsedAt: channel.lastUsedAt,
-      createdAt: channel.createdAt,
-      updatedAt: channel.updatedAt,
-      config: (() => {
-        try {
-          return parseChannelConfig(channel.type, channel.configJson);
-        } catch {
-          return {};
-        }
-      })(),
-      token: channel.tokenEncrypted ? decryptChannelToken(channel.tokenEncrypted) : null,
-      tokenEnabled: Boolean(channel.tokenEncrypted || channel.tokenHash),
-      relatedNotifications: channel.notifications.map((item) => item.notification),
-    };
+    return toChannelDetail(channel);
   }
 
   async update(userId: string, id: string, dto: UpdateChannelDto) {
@@ -176,17 +116,7 @@ export class ChannelsService {
     return this.prisma.channel.update({
       where: { id },
       data: updateData,
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        configJson: true,
-        status: true,
-        retryCount: true,
-        lastUsedAt: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: channelBaseSelect,
     });
   }
 
@@ -194,63 +124,13 @@ export class ChannelsService {
     const channel = await this.ensureChannelExists(userId, id);
 
     if (channel.status !== dto.status && dto.status === 'disabled') {
-      const references = await this.prisma.notificationChannel.findMany({
-        where: {
-          channelId: id,
-          notification: {
-            userId,
-            status: 'active',
-          },
-        },
-        select: {
-          notificationId: true,
-        },
-      });
-
-      const blockedIds: string[] = [];
-      for (const reference of references) {
-        const availableCount = await this.prisma.notificationChannel.count({
-          where: {
-            notificationId: reference.notificationId,
-            channelId: { not: id },
-            channel: {
-              userId,
-              status: 'active',
-            },
-          },
-        });
-
-        if (availableCount === 0) blockedIds.push(reference.notificationId);
-      }
-
-      if (blockedIds.length > 0) {
-        await this.prisma.notification.updateMany({
-          where: {
-            id: { in: blockedIds },
-            userId,
-          },
-          data: {
-            status: 'blocked_no_channel',
-            stopReason: '无可用渠道',
-          },
-        });
-      }
+      await this.blockNotificationsWithoutAlternative(userId, id);
     }
 
     return this.prisma.channel.update({
       where: { id },
       data: { status: dto.status },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        configJson: true,
-        status: true,
-        retryCount: true,
-        lastUsedAt: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: channelBaseSelect,
     });
   }
 
@@ -302,5 +182,50 @@ export class ChannelsService {
 
   private generateToken() {
     return randomBytes(24).toString('hex');
+  }
+
+  /**
+   * 禁用渠道时，把那些"此渠道为唯一活跃渠道"的通知标记为 blocked_no_channel。
+   *
+   * 原实现对每个引用做一次 count 查询（N+1）。这里改为一次批量查询：
+   *   1. 找出所有受影响的 notification
+   *   2. 一次查询它们当中哪些还有其它活跃渠道
+   *   3. 取差集，得到需要 block 的 notification
+   */
+  private async blockNotificationsWithoutAlternative(
+    userId: string,
+    disabledChannelId: string,
+  ): Promise<void> {
+    const references = await this.prisma.notificationChannel.findMany({
+      where: {
+        channelId: disabledChannelId,
+        notification: { userId, status: 'active' },
+      },
+      select: { notificationId: true },
+    });
+
+    const impactedIds = references.map((ref) => ref.notificationId);
+    if (impactedIds.length === 0) return;
+
+    const alternatives = await this.prisma.notificationChannel.findMany({
+      where: {
+        notificationId: { in: impactedIds },
+        channelId: { not: disabledChannelId },
+        channel: { userId, status: 'active' },
+      },
+      select: { notificationId: true },
+    });
+
+    const hasAlternative = new Set(
+      alternatives.map((ref) => ref.notificationId),
+    );
+    const blockedIds = impactedIds.filter((nid) => !hasAlternative.has(nid));
+
+    if (blockedIds.length === 0) return;
+
+    await this.prisma.notification.updateMany({
+      where: { id: { in: blockedIds }, userId },
+      data: { status: 'blocked_no_channel', stopReason: '无可用渠道' },
+    });
   }
 }

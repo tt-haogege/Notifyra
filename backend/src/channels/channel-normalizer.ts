@@ -27,7 +27,9 @@ const supportedTypes = new Set<ChannelType>([
   'pushplus',
 ]);
 
-const frontendConfigKeyMap: Partial<Record<ChannelType, Record<string, string>>> = {
+const frontendConfigKeyMap: Partial<
+  Record<ChannelType, Record<string, string>>
+> = {
   wecom_webhook: { webhookUrl: 'webhook' },
   feishu_webhook: { webhookUrl: 'webhook' },
   dingtalk_webhook: { webhookUrl: 'webhook' },

@@ -21,7 +21,8 @@ export class TestNotificationController {
   ) {
     await this.notificationsService.getDetail(user.userId, id);
 
-    const hasOverrides = dto.overrideTitle !== undefined || dto.overrideContent !== undefined;
+    const hasOverrides =
+      dto.overrideTitle !== undefined || dto.overrideContent !== undefined;
 
     if (hasOverrides) {
       return this.executionService.executeNotificationWithOverrides(

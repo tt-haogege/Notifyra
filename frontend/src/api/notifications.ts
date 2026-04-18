@@ -1,4 +1,7 @@
-import client from './client';
+import { http } from './client';
+import type { PaginatedResult } from '../types/shared';
+
+export type { PaginatedResult };
 
 export type TriggerType = 'once' | 'recurring' | 'webhook';
 export type NotificationStatus = 'active' | 'disabled' | 'blocked_no_channel' | 'completed';
@@ -27,6 +30,8 @@ export interface Notification {
   updatedAt: string;
   boundChannelCount?: number;
   webhookEnabled?: boolean;
+  /** 详情页返回明文 token（仅 webhook 通知；解密失败或旧数据为 null）。 */
+  webhookToken?: string | null;
   lastPushResult?: { status: 'success' | 'partial' | 'failure'; pushedAt: string } | null;
   recentRecords?: Array<{
     id: string;
@@ -57,32 +62,16 @@ export interface ListNotificationsParams {
   keyword?: string;
 }
 
-export interface PaginatedResult<T> {
-  items: T[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
 export const notificationsApi = {
-  create: (data: CreateNotificationDto) =>
-    client.post<{ id: string }>('/notifications', data).then((r) => r.data),
-
+  create: (data: CreateNotificationDto) => http.post<{ id: string }>('/notifications', data),
   list: (params?: ListNotificationsParams) =>
-    client.get<PaginatedResult<Notification>>('/notifications', { params }).then((r) => r.data),
-
-  getDetail: (id: string) =>
-    client.get<Notification>(`/notifications/${id}`).then((r) => r.data),
-
+    http.get<PaginatedResult<Notification>>('/notifications', { params }),
+  getDetail: (id: string) => http.get<Notification>(`/notifications/${id}`),
   update: (id: string, data: Partial<CreateNotificationDto>) =>
-    client.patch<Notification>(`/notifications/${id}`, data).then((r) => r.data),
-
+    http.patch<Notification>(`/notifications/${id}`, data),
   updateStatus: (id: string, status: { status: NotificationStatus }) =>
-    client.patch<Notification>(`/notifications/${id}/status`, status).then((r) => r.data),
-
+    http.patch<Notification>(`/notifications/${id}/status`, status),
   resetWebhookToken: (id: string) =>
-    client.post<{ webhookToken: string }>(`/notifications/${id}/reset-webhook-token`).then((r) => r.data),
-
-  remove: (id: string) =>
-    client.delete<{ id: string }>(`/notifications/${id}`).then((r) => r.data),
+    http.post<{ webhookToken: string }>(`/notifications/${id}/reset-webhook-token`),
+  remove: (id: string) => http.del<{ id: string }>(`/notifications/${id}`),
 };

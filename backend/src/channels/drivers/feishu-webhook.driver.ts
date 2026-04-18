@@ -1,54 +1,27 @@
 import { Injectable } from '@nestjs/common';
-import { GenericWebhookDriver } from './generic-webhook.driver';
-import {
-  ChannelDriverSendInput,
-  ChannelDriverSendResult,
-} from './channel-driver.interface';
+import { ChannelDriverSendInput } from './channel-driver.interface';
+import { DispatchOptions, WebhookDriverBase } from './webhook-driver.base';
+
+interface FeishuResponse {
+  code?: number;
+  msg?: string;
+}
 
 @Injectable()
-export class FeishuWebhookDriver extends GenericWebhookDriver {
-  readonly type: 'feishu_webhook' = 'feishu_webhook';
+export class FeishuWebhookDriver extends WebhookDriverBase {
+  readonly type = 'feishu_webhook' as const;
 
-  async send(
+  protected buildDispatch(
     input: ChannelDriverSendInput,
-  ): Promise<ChannelDriverSendResult> {
-    const webhook = this.getRequiredStringConfig(input, 'webhook');
-    if (typeof webhook !== 'string') {
-      return webhook;
-    }
-
-    return this.postJson({
-      url: webhook,
+  ): DispatchOptions<FeishuResponse> {
+    return {
+      url: this.requireString(input, 'webhook'),
       body: {
         msg_type: 'text',
-        content: {
-          text: `${input.title}\n${input.content}`,
-        },
+        content: { text: `${input.title}\n${input.content}` },
       },
-      parseResponse: async (response) => {
-        if (!response.ok) {
-          return {
-            success: false,
-            errorMessage: `请求失败，状态码：${response.status}`,
-          };
-        }
-
-        const raw = await this.parseJsonResponse<{ code?: number; msg?: string }>(
-          response,
-        );
-        if (this.isSendFailure(raw)) {
-          return raw;
-        }
-        if (raw.code === 0) {
-          return { success: true, raw };
-        }
-
-        return {
-          success: false,
-          errorMessage: raw.msg || '请求失败',
-          raw,
-        };
-      },
-    });
+      isSuccess: (raw) => raw.code === 0,
+      extractError: (raw) => raw.msg,
+    };
   }
 }

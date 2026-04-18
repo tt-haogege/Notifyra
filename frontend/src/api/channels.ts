@@ -1,4 +1,7 @@
-import client from './client';
+import { http } from './client';
+import type { PaginatedResult } from '../types/shared';
+
+export type { PaginatedResult };
 
 export type ChannelType =
   | 'wecom_webhook'
@@ -46,13 +49,6 @@ export interface ListChannelsParams {
   keyword?: string;
 }
 
-export interface PaginatedResult<T> {
-  items: T[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
 export interface UpdateChannelDto {
   name?: string;
   config?: Record<string, unknown>;
@@ -60,24 +56,13 @@ export interface UpdateChannelDto {
 }
 
 export const channelsApi = {
-  create: (data: CreateChannelDto) =>
-    client.post<CreateChannelResult>('/channels', data).then((r) => r.data),
-
+  create: (data: CreateChannelDto) => http.post<CreateChannelResult>('/channels', data),
   list: (params?: ListChannelsParams) =>
-    client.get<PaginatedResult<Channel>>('/channels', { params }).then((r) => r.data),
-
-  getDetail: (id: string) =>
-    client.get<Channel>(`/channels/${id}`).then((r) => r.data),
-
-  update: (id: string, data: UpdateChannelDto) =>
-    client.patch<Channel>(`/channels/${id}`, data).then((r) => r.data),
-
+    http.get<PaginatedResult<Channel>>('/channels', { params }),
+  getDetail: (id: string) => http.get<Channel>(`/channels/${id}`),
+  update: (id: string, data: UpdateChannelDto) => http.patch<Channel>(`/channels/${id}`, data),
   updateStatus: (id: string, status: { status: ChannelStatus }) =>
-    client.patch<Channel>(`/channels/${id}/status`, status).then((r) => r.data),
-
-  resetToken: (id: string) =>
-    client.post<{ token: string }>(`/channels/${id}/reset-token`).then((r) => r.data),
-
-  remove: (id: string) =>
-    client.delete<{ id: string }>(`/channels/${id}`).then((r) => r.data),
+    http.patch<Channel>(`/channels/${id}/status`, status),
+  resetToken: (id: string) => http.post<{ token: string }>(`/channels/${id}/reset-token`),
+  remove: (id: string) => http.del<{ id: string }>(`/channels/${id}`),
 };

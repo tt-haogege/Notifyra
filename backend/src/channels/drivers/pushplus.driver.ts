@@ -1,53 +1,28 @@
 import { Injectable } from '@nestjs/common';
-import { GenericWebhookDriver } from './generic-webhook.driver';
-import {
-  ChannelDriverSendInput,
-  ChannelDriverSendResult,
-} from './channel-driver.interface';
+import { ChannelDriverSendInput } from './channel-driver.interface';
+import { DispatchOptions, WebhookDriverBase } from './webhook-driver.base';
+
+interface PushplusResponse {
+  code?: number;
+  msg?: string;
+}
 
 @Injectable()
-export class PushplusDriver extends GenericWebhookDriver {
-  readonly type: 'pushplus' = 'pushplus';
+export class PushplusDriver extends WebhookDriverBase {
+  readonly type = 'pushplus' as const;
 
-  async send(
+  protected buildDispatch(
     input: ChannelDriverSendInput,
-  ): Promise<ChannelDriverSendResult> {
-    const token = this.getRequiredStringConfig(input, 'token');
-    if (typeof token !== 'string') {
-      return token;
-    }
-
-    return this.postJson({
+  ): DispatchOptions<PushplusResponse> {
+    return {
       url: 'https://www.pushplus.plus/send',
       body: {
-        token,
+        token: this.requireString(input, 'token'),
         title: input.title,
         content: input.content,
       },
-      parseResponse: async (response) => {
-        if (!response.ok) {
-          return {
-            success: false,
-            errorMessage: `请求失败，状态码：${response.status}`,
-          };
-        }
-
-        const raw = await this.parseJsonResponse<{ code?: number; msg?: string }>(
-          response,
-        );
-        if (this.isSendFailure(raw)) {
-          return raw;
-        }
-        if (raw.code === 200) {
-          return { success: true, raw };
-        }
-
-        return {
-          success: false,
-          errorMessage: raw.msg || '请求失败',
-          raw,
-        };
-      },
-    });
+      isSuccess: (raw) => raw.code === 200,
+      extractError: (raw) => raw.msg,
+    };
   }
 }

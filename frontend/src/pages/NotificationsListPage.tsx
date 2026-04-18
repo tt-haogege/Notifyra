@@ -11,6 +11,7 @@ import { emitToast } from '../components/common/toast-events';
 import { notificationsApi } from '../api/notifications';
 import type { Notification as NotificationType } from '../api/notifications';
 import { CHANNEL_TYPE_LABELS } from '../constants/channelTypes';
+import { EyeIcon, PencilIcon, TrashIcon } from '../components/common/icons';
 
 const triggerMap: Record<string, string> = {
   once: '单次',
@@ -176,14 +177,20 @@ export default function NotificationsListPage() {
                 )}
               </div>
               <div className="table-actions align-right">
-                <Link className="icon-button" to={`/notifications/${n.id}`}>◔</Link>
-                <Link className="icon-button" to={`/notifications/${n.id}/edit`}>✎</Link>
+                <Link className="icon-button" to={`/notifications/${n.id}`} aria-label="查看通知" title="查看">
+                  <EyeIcon />
+                </Link>
+                <Link className="icon-button" to={`/notifications/${n.id}/edit`} aria-label="编辑通知" title="编辑">
+                  <PencilIcon />
+                </Link>
                 <button
                   className="icon-button danger"
                   type="button"
+                  aria-label="删除通知"
+                  title="删除"
                   onClick={() => setPendingDelete({ id: n.id, name: n.name })}
                 >
-                  ⌫
+                  <TrashIcon />
                 </button>
               </div>
             </div>

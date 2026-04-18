@@ -29,7 +29,9 @@ export class AiChatService {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new BadRequestException(`AI 调用失败: ${response.status} ${errorText}`);
+      throw new BadRequestException(
+        `AI 调用失败: ${response.status} ${errorText}`,
+      );
     }
 
     const data = (await response.json()) as {

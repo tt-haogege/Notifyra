@@ -144,7 +144,11 @@ export class AiSessionsService {
     return { success: true, status };
   }
 
-  async updateCollectedParams(userId: string, id: string, params: Record<string, unknown>) {
+  async updateCollectedParams(
+    userId: string,
+    id: string,
+    params: Record<string, unknown>,
+  ) {
     const session = await this.prisma.aiSession.findFirst({
       where: { id, userId },
     });
@@ -157,7 +161,9 @@ export class AiSessionsService {
 
     await this.prisma.aiSession.update({
       where: { id },
-      data: { collectedParamsJson: JSON.stringify({ ...currentParams, ...params }) },
+      data: {
+        collectedParamsJson: JSON.stringify({ ...currentParams, ...params }),
+      },
     });
 
     return { success: true };
@@ -217,14 +223,19 @@ export class AiSessionsService {
       where: { userId },
     });
 
-    if (!settings?.aiBaseUrl || !settings?.aiApiKeyEncrypted || !settings?.aiModel) {
+    if (
+      !settings?.aiBaseUrl ||
+      !settings?.aiApiKeyEncrypted ||
+      !settings?.aiModel
+    ) {
       throw new BadRequestException('AI 未配置，请先在设置中配置 AI');
     }
 
-    const messages: ChatMessage[] = [{ role: 'system', content: SYSTEM_PROMPT }];
-    const history: Array<{ role: 'user' | 'assistant'; content: string }> = JSON.parse(
-      session.messagesJson,
-    );
+    const messages: ChatMessage[] = [
+      { role: 'system', content: SYSTEM_PROMPT },
+    ];
+    const history: Array<{ role: 'user' | 'assistant'; content: string }> =
+      JSON.parse(session.messagesJson);
     messages.push(...history);
     messages.push({ role: 'user', content: message });
 

@@ -28,19 +28,28 @@ export class AuthController {
 
   @Post('change-password')
   @UseGuards(JwtAuthGuard)
-  changePassword(@CurrentUser() user: { userId: string }, @Body() dto: ChangePasswordDto) {
+  changePassword(
+    @CurrentUser() user: { userId: string },
+    @Body() dto: ChangePasswordDto,
+  ) {
     return this.authService.changePassword(user.userId, dto);
   }
 
   @Patch('profile')
   @UseGuards(JwtAuthGuard)
-  updateProfile(@CurrentUser() user: { userId: string }, @Body() body: { avatar?: string }) {
+  updateProfile(
+    @CurrentUser() user: { userId: string },
+    @Body() body: { avatar?: string },
+  ) {
     return this.authService.updateProfile(user.userId, body);
   }
 
   @Post('avatar')
   @UseGuards(JwtAuthGuard)
-  uploadAvatar(@CurrentUser() user: { userId: string }, @Body() body: { dataUrl: string }) {
+  uploadAvatar(
+    @CurrentUser() user: { userId: string },
+    @Body() body: { dataUrl: string },
+  ) {
     return this.authService.uploadAvatar(user.userId, body.dataUrl);
   }
 }

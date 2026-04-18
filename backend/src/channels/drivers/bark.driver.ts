@@ -1,48 +1,27 @@
 import { Injectable } from '@nestjs/common';
-import { GenericWebhookDriver } from './generic-webhook.driver';
-import {
-  ChannelDriverSendInput,
-  ChannelDriverSendResult,
-} from './channel-driver.interface';
+import { ChannelDriverSendInput } from './channel-driver.interface';
+import { DispatchOptions, WebhookDriverBase } from './webhook-driver.base';
+
+interface BarkResponse {
+  code?: number;
+  message?: string;
+}
 
 @Injectable()
-export class BarkDriver extends GenericWebhookDriver {
-  readonly type: 'bark' = 'bark';
+export class BarkDriver extends WebhookDriverBase {
+  readonly type = 'bark' as const;
 
-  async send(input: ChannelDriverSendInput): Promise<ChannelDriverSendResult> {
-    const serverUrl = this.getRequiredStringConfig(input, 'serverUrl');
-    if (typeof serverUrl !== 'string') {
-      return serverUrl;
-    }
-
-    return this.postJson({
-      url: `${serverUrl.replace(/\/+$/, '')}/${input.title}/${input.content}`,
-      body: {},
-      parseResponse: async (response) => {
-        if (!response.ok) {
-          return {
-            success: false,
-            errorMessage: `请求失败，状态码：${response.status}`,
-          };
-        }
-
-        const raw = await this.parseJsonResponse<{
-          code?: number;
-          message?: string;
-        }>(response);
-        if (this.isSendFailure(raw)) {
-          return raw;
-        }
-        if (raw.code === 200) {
-          return { success: true, raw };
-        }
-
-        return {
-          success: false,
-          errorMessage: raw.message || '请求失败',
-          raw,
-        };
-      },
-    });
+  protected buildDispatch(
+    input: ChannelDriverSendInput,
+  ): DispatchOptions<BarkResponse> {
+    const serverUrl = this.requireString(input, 'serverUrl').replace(
+      /\/+$/,
+      '',
+    );
+    return {
+      url: `${serverUrl}/${input.title}/${input.content}`,
+      isSuccess: (raw) => raw.code === 200,
+      extractError: (raw) => raw.message,
+    };
   }
 }

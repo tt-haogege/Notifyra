@@ -7,11 +7,8 @@ import { StatusBadge } from '../components/common/StatusBadge';
 import { channelsApi } from '../api/channels';
 import { CHANNEL_CONFIG_FIELD_LABELS, CHANNEL_TYPE_LABELS } from '../constants/channelTypes';
 import { emitToast } from '../components/common/toast-events';
-
-function maskToken(token: string) {
-  if (token.length <= 16) return token;
-  return `${token.slice(0, 6)}******${token.slice(-6)}`;
-}
+import { CopyIconButton } from '../components/common/CopyIconButton';
+import { maskToken } from '../utils/token';
 
 export default function ChannelDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -98,31 +95,7 @@ export default function ChannelDetailPage() {
                 <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flex: '1 1 280px', minWidth: 0 }}>
                     <code style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-all' }}>{maskToken(displayToken)}</code>
-                    <button
-                      type="button"
-                      aria-label="复制 Token"
-                      title="复制 Token"
-                      onClick={() => {
-                        navigator.clipboard.writeText(displayToken);
-                        emitToast('Token 已复制', 'success');
-                      }}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: 0,
-                        border: 'none',
-                        background: 'transparent',
-                        color: 'var(--color-primary)',
-                        cursor: 'pointer',
-                        lineHeight: 0,
-                      }}
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                      </svg>
-                    </button>
+                    <CopyIconButton value={displayToken} label="复制 Token" successMessage="Token 已复制" />
                   </div>
                   <button className="ghost-button" type="button" onClick={() => resetTokenMutation.mutate()} disabled={resetTokenMutation.isPending}>
                     {resetTokenMutation.isPending ? '重置中...' : '重置 Token'}

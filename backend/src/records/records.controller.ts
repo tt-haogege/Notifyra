@@ -10,7 +10,10 @@ export class RecordsController {
   constructor(private recordsService: RecordsService) {}
 
   @Get()
-  list(@CurrentUser() user: { userId: string }, @Query() query: ListPushRecordsQueryDto) {
+  list(
+    @CurrentUser() user: { userId: string },
+    @Query() query: ListPushRecordsQueryDto,
+  ) {
     return this.recordsService.list(user.userId, query);
   }
 

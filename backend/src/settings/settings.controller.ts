@@ -15,7 +15,10 @@ export class SettingsController {
   }
 
   @Patch()
-  update(@CurrentUser() user: { userId: string }, @Body() dto: UpdateSettingsDto) {
+  update(
+    @CurrentUser() user: { userId: string },
+    @Body() dto: UpdateSettingsDto,
+  ) {
     return this.settingsService.update(user.userId, dto);
   }
 }

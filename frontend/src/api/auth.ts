@@ -1,4 +1,4 @@
-import client from './client';
+import { http } from './client';
 
 export interface LoginResult {
   accessToken: string;
@@ -14,22 +14,19 @@ export interface UserProfile {
 
 export const authApi = {
   login: (username: string, password: string) =>
-    client
+    http
       .post<{ token: string; username: string }>('/auth/login', { username, password })
-      .then((r) => ({ accessToken: r.data.token, username: r.data.username })),
+      .then((r) => ({ accessToken: r.token, username: r.username })),
 
   register: (username: string, password: string) =>
-    client.post<{ userId: string }>('/auth/register', { username, password }).then((r) => r.data),
+    http.post<{ userId: string }>('/auth/register', { username, password }),
 
-  getProfile: () =>
-    client.get<UserProfile>('/auth/me').then((r) => r.data),
+  getProfile: () => http.get<UserProfile>('/auth/me'),
 
   changePassword: (data: { oldPassword: string; newPassword: string }) =>
-    client.post<{ success: boolean }>('/auth/change-password', data).then((r) => r.data),
+    http.post<{ success: boolean }>('/auth/change-password', data),
 
-  uploadAvatar: (dataUrl: string) =>
-    client.post<UserProfile>('/auth/avatar', { dataUrl }).then((r) => r.data),
+  uploadAvatar: (dataUrl: string) => http.post<UserProfile>('/auth/avatar', { dataUrl }),
 
-  updateProfile: (data: { avatar?: string }) =>
-    client.patch<UserProfile>('/auth/profile', data).then((r) => r.data),
+  updateProfile: (data: { avatar?: string }) => http.patch<UserProfile>('/auth/profile', data),
 };

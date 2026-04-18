@@ -1,4 +1,4 @@
-import client from './client';
+import { http } from './client';
 
 export interface AiSession {
   id: string;
@@ -28,23 +28,29 @@ export interface AiChatResult {
 
 export const aiApi = {
   createSession: (initialMessage?: string) =>
-    client.post<AiSessionDetail>('/ai/sessions', { initialMessage }).then((r) => r.data),
+    http.post<AiSessionDetail>('/ai/sessions', { initialMessage }),
 
-  listSessions: () =>
-    client.get<AiSessionDetail[]>('/ai/sessions').then((r) => r.data),
+  listSessions: () => http.get<AiSessionDetail[]>('/ai/sessions'),
 
-  getSessionDetail: (id: string) =>
-    client.get<AiSessionDetail>(`/ai/sessions/${id}`).then((r) => r.data),
+  getSessionDetail: (id: string) => http.get<AiSessionDetail>(`/ai/sessions/${id}`),
 
   appendMessage: (sessionId: string, message: string) =>
-    client.post<{ success: boolean; messageCount: number }>(`/ai/sessions/${sessionId}/messages`, { message }).then((r) => r.data),
+    http.post<{ success: boolean; messageCount: number }>(
+      `/ai/sessions/${sessionId}/messages`,
+      { message },
+    ),
 
   chat: (sessionId: string, message: string) =>
-    client.post<AiChatResult>(`/ai/sessions/${sessionId}/chat`, { message }).then((r) => r.data),
+    http.post<AiChatResult>(`/ai/sessions/${sessionId}/chat`, { message }),
 
   markReadyToCreate: (sessionId: string) =>
-    client.post<{ success: boolean; status: 'ready_to_create' }>(`/ai/sessions/${sessionId}/ready`).then((r) => r.data),
+    http.post<{ success: boolean; status: 'ready_to_create' }>(
+      `/ai/sessions/${sessionId}/ready`,
+    ),
 
   linkNotification: (sessionId: string, notificationId: string) =>
-    client.post<{ success: boolean; status: 'completed' }>(`/ai/sessions/${sessionId}/link-notification`, { notificationId }).then((r) => r.data),
+    http.post<{ success: boolean; status: 'completed' }>(
+      `/ai/sessions/${sessionId}/link-notification`,
+      { notificationId },
+    ),
 };

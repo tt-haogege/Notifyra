@@ -64,7 +64,10 @@ export class NotificationsController {
   }
 
   @Post(':id/reset-webhook-token')
-  resetWebhookToken(@CurrentUser() user: { userId: string }, @Param('id') id: string) {
+  resetWebhookToken(
+    @CurrentUser() user: { userId: string },
+    @Param('id') id: string,
+  ) {
     return this.notificationsService.resetWebhookToken(user.userId, id);
   }
 

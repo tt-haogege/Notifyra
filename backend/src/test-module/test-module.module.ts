@@ -7,6 +7,10 @@ import { TestNotificationController } from './test-notification.controller';
 
 @Module({
   imports: [ChannelsModule, NotificationsModule],
-  controllers: [TestChannelController, TestNotificationController, CodeExampleController],
+  controllers: [
+    TestChannelController,
+    TestNotificationController,
+    CodeExampleController,
+  ],
 })
 export class TestModuleModule {}

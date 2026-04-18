@@ -1,4 +1,4 @@
-import client from './client';
+import { http } from './client';
 
 export interface Settings {
   aiBaseUrl: string | null;
@@ -21,9 +21,6 @@ export interface UpdateSettingsDto {
 }
 
 export const settingsApi = {
-  get: () =>
-    client.get<Settings>('/settings').then((r) => r.data),
-
-  update: (data: UpdateSettingsDto) =>
-    client.patch<Settings>('/settings', data).then((r) => r.data),
+  get: () => http.get<Settings>('/settings'),
+  update: (data: UpdateSettingsDto) => http.patch<Settings>('/settings', data),
 };
