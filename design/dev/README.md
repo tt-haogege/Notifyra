@@ -33,6 +33,8 @@
   - git、提交、PR 与收尾约定
 - `DocumentationMaintenance.md`
   - 文档维护责任与更新规则
+- `AiQuickCreateFeatureRecord.md`
+  - AI 一句话新建通知的前后端实现、会话与 UI 迭代记录（Markdown/打字机、摘要卡片样式、Flex 陷阱等）
 - `ChannelCompatibilityFix-2026-04-04.md`
   - 渠道兼容修复的实现记录、验证结果与后续回归建议
 
