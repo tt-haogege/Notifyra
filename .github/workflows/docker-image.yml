@@ -13,7 +13,7 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: notify
+  IMAGE_NAME: notifyra
 
 permissions:
   contents: read
@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PUSH_IMAGE: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) }}
-      IMAGE_REPOSITORY: ${{ format('docker.io/{0}/notify', secrets.DOCKERHUB_USERNAME) }}
+      IMAGE_REPOSITORY: ${{ format('docker.io/{0}/notifyra', secrets.DOCKERHUB_USERNAME) }}
 
     steps:
       - name: Checkout code
@@ -55,8 +55,8 @@ jobs:
             type=semver,pattern={{major}}
             type=sha,prefix=sha-
           labels: |
-            org.opencontainers.image.title=notify
-            org.opencontainers.image.description=Notify Docker image
+            org.opencontainers.image.title=notifyra
+            org.opencontainers.image.description=Notifyra Docker image
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
 
